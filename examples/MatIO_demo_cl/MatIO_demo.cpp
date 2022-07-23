@@ -11,7 +11,7 @@ CONSOLE_APP_MAIN
 {
 	MatFile mat;
 	
-	String fileName = AppendFileNameX(GetDesktopFolder(), "temp_file_2.mat");
+	String fileName = AppendFileName(GetDesktopFolder(), "temp_file_2.mat");
 	
 	if (!FileExists(fileName)) {
 		if (!SaveFile(fileName, String(dataMat, dataMat_length))) {
