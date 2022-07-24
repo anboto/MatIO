@@ -4,7 +4,7 @@ options(BUILDER_OPTION) NOWARNINGS;
 
 uses
 	Core,
-	plugin/matio;
+	MatIO/plugin/matio;
 
 options
 	-DHAVE_ZLIB;
