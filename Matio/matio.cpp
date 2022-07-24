@@ -3,7 +3,7 @@
 #include <Core/Core.h>
 
 #include "matio.h"
-#include <MatIO/plugin/matio/lib/matioConfig.h>
+#include <plugin/matio/lib/matioConfig.h>
 
 namespace Upp {
 	
