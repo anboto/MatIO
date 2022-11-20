@@ -29,4 +29,4 @@ ATLAB ][*A2 MAT files. This library is designed for use by programs/libraries
 that do not have access or do not want to rely on MATLAB`'s shared 
 libraries.]&]
 [s0; Matio U`+`+ wrapper is a basic C`+`+ wrapper for Matio.&]
-[s0; A simple sample is included in Bazaar/MatIO`_demo package.]]
+[s0; A simple sample is included in examples/MatIO`_demo package.]]
