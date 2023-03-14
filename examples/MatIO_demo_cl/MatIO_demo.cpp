@@ -5,7 +5,7 @@
 
 using namespace Upp;
 
-#include <Matio/matio.h>
+#include <MatIO/matio.h>
 
 CONSOLE_APP_MAIN
 {

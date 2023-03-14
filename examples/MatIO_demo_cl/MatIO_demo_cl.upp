@@ -2,7 +2,7 @@ description "MATLAB MAT file I/O library demo\377";
 
 uses
 	Core,
-	Matio;
+	MatIO;
 
 file
 	MatIO_demo.cpp,

@@ -19,7 +19,7 @@ MatVar::MatVar(mat_t *mat, String name) {
 	ASSERT(mat != NULL);
 	
 	del = true;
-	var = Mat_VarReadInfo(mat, name);
+	var = Mat_VarReadInfo(mat, name.Begin());
 	if (var == NULL) 
 		return;
 }
