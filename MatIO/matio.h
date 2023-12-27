@@ -447,7 +447,7 @@ private:
 	
 	static MatStatic cons;
 	
-	static void LogFunc(int log_level, char *message) {
+	static void LogFunc(int log_level, const char *message) {
 		cons.logLevel = log_level;
 		cons.lastError = message;
 	}

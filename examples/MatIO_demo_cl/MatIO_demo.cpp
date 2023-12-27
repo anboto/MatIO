@@ -11,20 +11,13 @@ CONSOLE_APP_MAIN
 {
 	MatFile mat;
 	
-	String fileName = AppendFileName(GetDesktopFolder(), "temp_file_2.mat");
+	String fileName = "temp_file_2.mat";
 	
-	if (!FileExists(fileName)) {
-		if (!SaveFile(fileName, String(dataMat, dataMat_length))) {
-			Cout() << "\nError: Impossible to save .mat file";
-			return;
-		}
-	}
+	if (!FileExists(fileName)) 
+		VERIFY(SaveFile(fileName, String(dataMat, dataMat_length))); // Error: Impossible to save .mat file
 	
-	if (!mat.OpenWrite(fileName)) {
-		Cout() << Format("\nError: %s", MatFile::GetLastError());
-		return;
-	}
-	
+	VERIFY(mat.OpenWrite(fileName));	 
+		
 	Cout() << "\nVersion " << mat.GetVersionName();
 	
 	Cout() << "\nVariables list:";
@@ -33,31 +26,31 @@ CONSOLE_APP_MAIN
 		Cout() << Format("\n- %s <%s>(%d, %d)", var.GetName(), var.GetTypeString(), var.GetDimCount(0), var.GetDimCount(1));
 	}
 	
-	MatVar est = mat.GetVar("Estructura");
+	MatVar est = mat.GetVar("Structure");
 	if (est.IsLoaded()) {
-		Cout() << "\nEstructura " << est.GetTypeString();
+		Cout() << "\nStructure " << est.GetTypeString();
 		int numf = est.GetFieldCount();
 		for (int i = 0; i < numf; ++i) {
 			String name = est.GetFieldName(i);
 			MatVar var = est.GetVar(name);
 			Cout() << Format("\n- %s <%s>(%d, %d)", name, var.GetTypeString(), var.GetDimCount(0), var.GetDimCount(1));
 		}
-		Cout() << "\nEstructura.Est2.Uno: " << mat.VarRead<int>(mat.GetVar("Estructura").GetVar("Est2").GetVar("Uno"));
-		Cout() << "\nEstructura.Est2.Dos: " << mat.VarRead<String>(mat.GetVar("Estructura").GetVar("Est2").GetVar("Dos"));
+		Cout() << "\nStructure.Est2.One: " << mat.VarRead<int>(mat.GetVar("Structure").GetVar("Est2").GetVar("One"));
+		Cout() << "\nStructure.Est2.Two: " << mat.VarRead<String>(mat.GetVar("Structure").GetVar("Est2").GetVar("Two"));
 		
 		mat.VarDelete("Estructura");
 	}
 	
 	Vector<String> elements;
-	elements << "Primero" << "Est2" << "Tercero";
+	elements << "First" << "Est2" << "Tercero";
 	MatVar estructura("Estructura", 1, 1, elements);
-	estructura.VarWriteStruct("Primero", "El primero");
+	estructura.VarWriteStruct("First", "The first");
 
 	Vector<String> elements2;
-	elements2 << "Uno" << "Dos";
+	elements2 << "One" << "Two";
 	MatVar est2("Est2", 1, 1, elements2);
-	est2.VarWriteStruct("Dos", "El segundo 22");
-	est2.VarWriteStruct("Uno", 211111);
+	est2.VarWriteStruct("Two", "The second 22");
+	est2.VarWriteStruct("One", 211111);
 	
 	estructura.VarWriteStruct("Est2", est2);
 	
@@ -113,11 +106,6 @@ CONSOLE_APP_MAIN
 	Mat_VarFree(matstruct);
 */
 
-
-	
-	
-	Cout() << "\nPress enter";		ReadStdIn();
-		
 	
 	MatMatrix<double> aa = mat.VarReadMat<double>("A");		
 	Cout() << "\nA";
@@ -134,13 +122,14 @@ CONSOLE_APP_MAIN
 	Cout() << "\nA_b";
 	aa.Print();
 
-	if (!mat.VarWrite("A_b", aa))
-		Cout() << "\nProblem writing A_b";
+	VERIFY(mat.VarWrite("A_b", aa));
 	
 	MatMatrix<double> w = mat.VarReadMat<double>("w");		
 	Cout() << "\nw";
 	w.Print();
 	
 	Cout() << "\nProgram ended";
+	#ifdef flagDEBUG
 	ReadStdIn();
+	#endif
 }

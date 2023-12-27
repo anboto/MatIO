@@ -28,5 +28,7 @@ open`-source C library for reading and writing binary ][*A^https`:`/`/en`.wikipe
 ATLAB ][*A2 MAT files. This library is designed for use by programs/libraries 
 that do not have access or do not want to rely on MATLAB`'s shared 
 libraries.]&]
-[s0; Matio U`+`+ wrapper is a basic C`+`+ wrapper for Matio.&]
+[s0; Matio U`+`+ wrapper is a basic C`+`+ wrapper for Matio, updated 
+to commit [^https`:`/`/github`.com`/tbeu`/matio`/commit`/85da9ba83b4772fc87c4df3e939dd912406928a4^ 8
+5da9ba] (26/12/2023)&]
 [s0; A simple sample is included in examples/MatIO`_demo package.]]
