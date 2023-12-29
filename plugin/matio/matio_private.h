@@ -80,7 +80,7 @@
 	#endif
 #endif
 #if defined(MAT73) && MAT73
-#include <hdf5.h>
+	#include <plugin/Hdf5/src/hdf5.h>
 #endif
 
 #ifndef EXTERN

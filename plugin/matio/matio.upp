@@ -4,12 +4,20 @@ options(BUILDER_OPTION) NOWARNINGS;
 
 uses
 	Core,
-	plugin/z;
+	plugin/z,
+	plugin/Hdf5;
 
 options
-	-DHAVE_ZLIB;
+	-DHAVE_ZLIB,
+	-DMAT73,
+	-DHAVE_HDF5;
+
+include
+	.,
+	./lib;
 
 file
+	matio_private.h,
 	lib\mat.c,
 	lib\matio.h,
 	lib\endian.c,
@@ -22,7 +30,6 @@ file
 	lib\mat5.h,
 	lib\mat73.c,
 	lib\mat73.h,
-	lib\matio_private.h,
 	lib\matvar_cell.c,
 	lib\matvar_struct.c,
 	lib\read_data.c,
