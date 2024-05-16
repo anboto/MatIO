@@ -49,10 +49,10 @@ public:
 		this->rows = size;
 		this->cols = 1;
 	}
-	void Alloc(int rows, int cols) {
-		data.Alloc(rows*cols); 
-		this->rows = rows;
-		this->cols = cols;	
+	void Alloc(int _rows, int _cols) {
+		data.Alloc(_rows*_cols); 
+		this->rows = _rows;
+		this->cols = _cols;	
 	}
 	void Clear() 							{data.Clear();}
 	
