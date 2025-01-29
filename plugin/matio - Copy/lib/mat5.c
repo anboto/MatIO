@@ -3,7 +3,7 @@
  * @ingroup MAT
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -42,7 +42,6 @@
 #define strdup _strdup
 #endif
 
-/* clang-format off */
 /** Get type from tag */
 #define TYPE_FROM_TAG(a) \
     (((a)&0x000000ff) <= MAT_T_FUNCTION) ? (enum matio_types)((a)&0x000000ff) : MAT_T_UNKNOWN
@@ -51,7 +50,6 @@
     (((a)&0x000000ff) <= MAT_C_OPAQUE) ? ((enum matio_classes)((a)&0x000000ff)) : MAT_C_EMPTY
 /** Class type mask */
 #define CLASS_TYPE_MASK 0x000000ff
-/* clang-format on */
 
 #if !defined(MAX_READ_SIZE_WITHOUT_EOF_CHECK)
 /* Maximal number of bytes to read without EOF check */
@@ -67,7 +65,7 @@ static mat_complex_split_t null_complex_data = {NULL, NULL};
 static int GetTypeBufSize(matvar_t *matvar, size_t *size);
 static int GetStructFieldBufSize(matvar_t *matvar, size_t *size);
 static int GetCellArrayFieldBufSize(matvar_t *matvar, size_t *size);
-static void SetFieldNames(matvar_t *matvar, const char *buf, size_t nfields,
+static void SetFieldNames(matvar_t *matvar, char *buf, size_t nfields,
                           mat_uint32_t fieldname_length);
 static size_t ReadSparse(mat_t *mat, const matvar_t *matvar, mat_uint32_t *n, mat_uint32_t **v);
 #if HAVE_ZLIB
@@ -264,7 +262,7 @@ GetTypeBufSize(matvar_t *matvar, size_t *size)
             break;
         }
         case MAT_C_CHAR:
-            if ( MAT_T_INT8 == matvar->data_type )
+            if ( MAT_T_UINT8 == matvar->data_type || MAT_T_INT8 == matvar->data_type )
                 err = Mul(&data_bytes, nelems, Mat_SizeOf(MAT_T_UINT16));
             else
                 err = Mul(&data_bytes, nelems, Mat_SizeOf(matvar->data_type));
@@ -459,7 +457,7 @@ GetEmptyMatrixMaxBufSize(const char *name, int rank, size_t *size)
 }
 
 static void
-SetFieldNames(matvar_t *matvar, const char *buf, size_t nfields, mat_uint32_t fieldname_length)
+SetFieldNames(matvar_t *matvar, char *buf, size_t nfields, mat_uint32_t fieldname_length)
 {
     matvar->internal->num_fields = nfields;
     matvar->internal->fieldnames = (char **)calloc(nfields, sizeof(*matvar->internal->fieldnames));
@@ -481,12 +479,12 @@ ReadSparse(mat_t *mat, const matvar_t *matvar, mat_uint32_t *n, mat_uint32_t **v
 {
     int data_in_tag = 0;
     enum matio_types packed_type;
+    mat_uint32_t tag[2] = {0, 0};
     size_t bytesread = 0;
     mat_uint32_t N = 0;
 
     if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
 #if HAVE_ZLIB
-        mat_uint32_t tag[2] = {0, 0};
         matvar->internal->z->avail_in = 0;
         if ( 0 != Inflate(mat, matvar->internal->z, tag, 4, &bytesread) ) {
             return bytesread;
@@ -503,7 +501,6 @@ ReadSparse(mat_t *mat, const matvar_t *matvar, mat_uint32_t *n, mat_uint32_t **v
         }
 #endif
     } else {
-        mat_uint32_t tag[2] = {0, 0};
         if ( 0 != Read(tag, 4, 1, (FILE *)mat->fp, &bytesread) ) {
             return bytesread;
         }
@@ -527,8 +524,9 @@ ReadSparse(mat_t *mat, const matvar_t *matvar, mat_uint32_t *n, mat_uint32_t **v
     *n = N / 4;
     *v = (mat_uint32_t *)calloc(N, 1);
     if ( NULL != *v ) {
+        int nBytes;
         if ( matvar->compression == MAT_COMPRESSION_NONE ) {
-            int nBytes = ReadUInt32Data(mat, *v, packed_type, *n);
+            nBytes = ReadUInt32Data(mat, *v, packed_type, *n);
             /*
                 * If the data was in the tag we started on a 4-byte
                 * boundary so add 4 to make it an 8-byte
@@ -540,7 +538,7 @@ ReadSparse(mat_t *mat, const matvar_t *matvar, mat_uint32_t *n, mat_uint32_t **v
                 (void)fseeko((FILE *)mat->fp, 8 - (nBytes % 8), SEEK_CUR);
 #if HAVE_ZLIB
         } else if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
-            int nBytes = ReadCompressedUInt32Data(mat, matvar->internal->z, *v, packed_type, *n);
+            nBytes = ReadCompressedUInt32Data(mat, matvar->internal->z, *v, packed_type, *n);
             /*
                 * If the data was in the tag we started on a 4-byte
                 * boundary so add 4 to make it an 8-byte
@@ -631,7 +629,7 @@ GetMatrixMaxBufSize(matvar_t *matvar, size_t *size)
 mat_t *
 Mat_Create5(const char *matname, const char *hdr_str)
 {
-    FILE *fp;
+    FILE *fp = NULL;
     mat_int16_t endian = 0, version;
     mat_t *mat = NULL;
     size_t err;
@@ -642,8 +640,6 @@ Mat_Create5(const char *matname, const char *hdr_str)
     if ( NULL != wname ) {
         fp = _wfopen(wname, L"w+b");
         free(wname);
-    } else {
-        fp = NULL;
     }
 #else
     fp = fopen(matname, "w+b");
@@ -878,56 +874,6 @@ WriteCompressedCharData(mat_t *mat, z_streamp z, void *data, size_t N, enum mati
                 } while ( z->avail_out == 0 );
             }
             break;
-        case MAT_T_INT8: {
-            mat_uint8_t *ptr;
-            mat_uint16_t c;
-            int i;
-
-            /* Matlab can't read MAT_C_CHAR as uint8, needs uint16 */
-            data_size = 2;
-            data_tag[0] = MAT_T_UINT16;
-            data_tag[1] = N * data_size;
-            z->next_in = ZLIB_BYTE_PTR(data_tag);
-            z->avail_in = 8;
-            do {
-                z->next_out = buf;
-                z->avail_out = buf_size;
-                deflate(z, Z_NO_FLUSH);
-                byteswritten += fwrite(buf, 1, buf_size - z->avail_out, (FILE *)mat->fp);
-            } while ( z->avail_out == 0 );
-
-            /* exit early if this is an empty data */
-            if ( NULL == data || N < 1 )
-                break;
-
-            z->next_in = (Bytef *)data;
-            z->avail_in = data_size * N;
-            ptr = (mat_uint8_t *)data;
-            for ( i = 0; i < N; i++ ) {
-                c = (mat_uint16_t) * (char *)ptr;
-                z->next_in = ZLIB_BYTE_PTR(&c);
-                z->avail_in = 2;
-                do {
-                    z->next_out = buf;
-                    z->avail_out = buf_size;
-                    deflate(z, Z_NO_FLUSH);
-                    byteswritten += fwrite(buf, 1, buf_size - z->avail_out, (FILE *)mat->fp);
-                } while ( z->avail_out == 0 );
-                ptr++;
-            }
-            /* Add/Compress padding to pad to 8-byte boundary */
-            if ( N * data_size % 8 ) {
-                z->next_in = pad;
-                z->avail_in = 8 - (N * data_size % 8);
-                do {
-                    z->next_out = buf;
-                    z->avail_out = buf_size;
-                    deflate(z, Z_NO_FLUSH);
-                    byteswritten += fwrite(buf, 1, buf_size - z->avail_out, (FILE *)mat->fp);
-                } while ( z->avail_out == 0 );
-            }
-            break;
-        }
         case MAT_T_UNKNOWN:
             /* Sometimes empty char data will have MAT_T_UNKNOWN, so just write a data tag */
             data_tag[0] = MAT_T_UINT16;
@@ -1038,7 +984,7 @@ WriteCompressedData(mat_t *mat, z_streamp z, void *data, int N, enum matio_types
 static size_t
 ReadNextCell(mat_t *mat, matvar_t *matvar)
 {
-    size_t bytesread = 0;
+    size_t bytesread = 0, i;
     int err;
     matvar_t **cells = NULL;
     size_t nelems = 1;
@@ -1065,12 +1011,11 @@ ReadNextCell(mat_t *mat, matvar_t *matvar)
 
     if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
 #if HAVE_ZLIB
-        size_t i;
         mat_uint32_t uncomp_buf[16];
         mat_uint32_t nBytes;
         mat_uint32_t array_flags;
 
-        memset(uncomp_buf, 0, sizeof(uncomp_buf));
+        memset(&uncomp_buf, 0, sizeof(uncomp_buf));
         for ( i = 0; i < nelems; i++ ) {
             cells[i] = Mat_VarCalloc();
             if ( NULL == cells[i] ) {
@@ -1268,8 +1213,7 @@ ReadNextCell(mat_t *mat, matvar_t *matvar)
                         }
                         if ( cells[i]->internal->data != NULL ||
                              cells[i]->class_type == MAT_C_STRUCT ||
-                             cells[i]->class_type == MAT_C_CELL ||
-                             (nBytes <= (1 << MAX_WBITS) && cells[i]->class_type == MAT_C_CHAR) ) {
+                             cells[i]->class_type == MAT_C_CELL ) {
                             /* Memory optimization: Free inflate state */
                             inflateEnd(cells[i]->internal->z);
                             free(cells[i]->internal->z);
@@ -1289,13 +1233,13 @@ ReadNextCell(mat_t *mat, matvar_t *matvar)
 #endif
 
     } else {
-        size_t i;
         mat_uint32_t buf[6] = {0, 0, 0, 0, 0, 0};
         mat_uint32_t nBytes;
         mat_uint32_t array_flags;
 
         for ( i = 0; i < nelems; i++ ) {
             size_t nbytes = 0;
+            mat_uint32_t name_len;
             cells[i] = Mat_VarCalloc();
             if ( NULL == cells[i] ) {
                 Mat_Critical("Couldn't allocate memory for cell %zu", i);
@@ -1385,10 +1329,11 @@ ReadNextCell(mat_t *mat, matvar_t *matvar)
                 (void)Mat_uint32Swap(buf);
                 (void)Mat_uint32Swap(buf + 1);
             }
+            name_len = 0;
             if ( buf[1] > 0 ) {
                 /* Name of variable */
                 if ( buf[0] == MAT_T_INT8 ) { /* Name not in tag */
-                    mat_uint32_t name_len = buf[1];
+                    name_len = buf[1];
                     if ( name_len % 8 > 0 ) {
                         if ( name_len < UINT32_MAX - 8 + (name_len % 8) ) {
                             name_len = name_len + 8 - (name_len % 8);
@@ -1430,8 +1375,9 @@ ReadNextCell(mat_t *mat, matvar_t *matvar)
 static size_t
 ReadNextStructField(mat_t *mat, matvar_t *matvar)
 {
+    mat_uint32_t fieldname_size;
     int err;
-    size_t bytesread = 0;
+    size_t bytesread = 0, nfields, i;
     matvar_t **fields = NULL;
     size_t nelems = 1, nelems_x_nfields;
 
@@ -1442,11 +1388,10 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
     }
     if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
 #if HAVE_ZLIB
-        size_t nfields, i;
         mat_uint32_t uncomp_buf[16];
-        mat_uint32_t array_flags, len, fieldname_size;
+        mat_uint32_t array_flags, len;
 
-        memset(uncomp_buf, 0, sizeof(uncomp_buf));
+        memset(&uncomp_buf, 0, sizeof(uncomp_buf));
         /* Field name length */
         err = Inflate(mat, matvar->internal->z, uncomp_buf, 8, &bytesread);
         if ( err ) {
@@ -1486,7 +1431,7 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
                 if ( NULL != ptr ) {
                     err = Inflate(mat, matvar->internal->z, ptr,
                                   (unsigned int)(nfields * fieldname_size + i), &bytesread);
-                    if ( MATIO_E_NO_ERROR == err ) {
+                    if ( 0 == err ) {
                         SetFieldNames(matvar, ptr, nfields, fieldname_size);
                     } else {
                         matvar->internal->num_fields = nfields;
@@ -1530,7 +1475,6 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
 
         matvar->data = calloc(nelems_x_nfields, matvar->data_size);
         if ( NULL == matvar->data ) {
-            matvar->nbytes = 0;
             Mat_Critical("Couldn't allocate memory for the data");
             return bytesread;
         }
@@ -1689,7 +1633,7 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
                             else if ( nBytes <= (1 << MAX_WBITS) ) {
                                 /* Memory optimization: Read data if less in size
                                    than the zlib inflate state (approximately) */
-                                /* err = */ Mat_VarRead5(mat, fields[i]);
+                                err = Mat_VarRead5(mat, fields[i]);
                                 fields[i]->internal->data = fields[i]->data;
                                 fields[i]->data = NULL;
                             }
@@ -1699,8 +1643,7 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
                         }
                         if ( fields[i]->internal->data != NULL ||
                              fields[i]->class_type == MAT_C_STRUCT ||
-                             fields[i]->class_type == MAT_C_CELL ||
-                             (nBytes <= (1 << MAX_WBITS) && fields[i]->class_type == MAT_C_CHAR) ) {
+                             fields[i]->class_type == MAT_C_CELL ) {
                             /* Memory optimization: Free inflate state */
                             inflateEnd(fields[i]->internal->z);
                             free(fields[i]->internal->z);
@@ -1719,9 +1662,8 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
         Mat_Critical("Not compiled with zlib support");
 #endif
     } else {
-        size_t nfields, i;
         mat_uint32_t buf[6] = {0, 0, 0, 0, 0, 0};
-        mat_uint32_t array_flags, len, fieldname_size;
+        mat_uint32_t array_flags, len;
 
         err = Read(buf, 4, 2, (FILE *)mat->fp, &bytesread);
         if ( err ) {
@@ -1804,7 +1746,6 @@ ReadNextStructField(mat_t *mat, matvar_t *matvar)
 
         matvar->data = calloc(nelems_x_nfields, matvar->data_size);
         if ( NULL == matvar->data ) {
-            matvar->nbytes = 0;
             Mat_Critical("Couldn't allocate memory for the data");
             return bytesread;
         }
@@ -2059,7 +2000,7 @@ WriteType(mat_t *mat, matvar_t *matvar)
         case MAT_C_INT8:
         case MAT_C_UINT8: {
             if ( matvar->isComplex ) {
-                const mat_complex_split_t *complex_data = (mat_complex_split_t *)matvar->data;
+                mat_complex_split_t *complex_data = (mat_complex_split_t *)matvar->data;
 
                 if ( NULL == matvar->data )
                     complex_data = &null_complex_data;
@@ -2084,7 +2025,7 @@ WriteType(mat_t *mat, matvar_t *matvar)
             if ( matvar->data_type == MAT_T_UTF8 ) {
                 nelems = matvar->nbytes;
             }
-            /* nBytes = */ WriteCharData(mat, matvar->data, nelems, matvar->data_type);
+            nBytes = WriteCharData(mat, matvar->data, nelems, matvar->data_type);
             break;
         case MAT_C_CELL: {
             size_t i;
@@ -2319,7 +2260,7 @@ WriteCompressedTypeArrayFlags(mat_t *mat, matvar_t *matvar, z_streamp z)
         return byteswritten;
     }
 
-    memset(uncomp_buf, 0, sizeof(uncomp_buf));
+    memset(&uncomp_buf, 0, sizeof(uncomp_buf));
     /* Array Flags */
     array_flags = matvar->class_type & CLASS_TYPE_MASK;
     if ( matvar->isComplex )
@@ -2400,7 +2341,7 @@ WriteCompressedType(mat_t *mat, matvar_t *matvar, z_streamp z)
         return byteswritten;
     }
 
-    memset(uncomp_buf, 0, sizeof(uncomp_buf));
+    memset(&uncomp_buf, 0, sizeof(uncomp_buf));
     err = Mat_MulDims(matvar, &nelems);
     if ( err ) {
         Mat_Critical("Integer multiplication overflow");
@@ -2579,7 +2520,7 @@ WriteCompressedCellArrayField(mat_t *mat, matvar_t *matvar, z_streamp z)
     if ( NULL == matvar || NULL == mat || NULL == z )
         return 0;
 
-    memset(uncomp_buf, 0, sizeof(uncomp_buf));
+    memset(&uncomp_buf, 0, sizeof(uncomp_buf));
     uncomp_buf[0] = MAT_T_MATRIX;
     if ( MAT_C_EMPTY != matvar->class_type ) {
         int err = GetCellArrayFieldBufSize(matvar, &field_buf_size);
@@ -2713,7 +2654,7 @@ WriteCompressedStructField(mat_t *mat, matvar_t *matvar, z_streamp z)
         return byteswritten;
     }
 
-    memset(uncomp_buf, 0, sizeof(uncomp_buf));
+    memset(&uncomp_buf, 0, sizeof(uncomp_buf));
     uncomp_buf[0] = MAT_T_MATRIX;
     if ( MAT_C_EMPTY != matvar->class_type ) {
         int err = GetStructFieldBufSize(matvar, &field_buf_size);
@@ -2842,7 +2783,7 @@ Mat_WriteCompressedEmptyVariable5(mat_t *mat, const char *name, int rank, const 
     /* Array Flags */
     array_flags = MAT_C_DOUBLE;
 
-    memset(uncomp_buf, 0, sizeof(uncomp_buf));
+    memset(&uncomp_buf, 0, sizeof(uncomp_buf));
     uncomp_buf[0] = MAT_T_MATRIX;
     err = GetEmptyMatrixMaxBufSize(name, rank, &empty_matrix_max_buf_size);
     if ( err || empty_matrix_max_buf_size > UINT32_MAX )
@@ -2903,8 +2844,8 @@ Mat_WriteCompressedEmptyVariable5(mat_t *mat, const char *name, int rank, const 
         memset(uncomp_buf, 0, 8);
         uncomp_buf[0] = (array_name_len << 16) | array_name_type;
         memcpy(uncomp_buf + 1, name, array_name_len);
-        /* if ( array_name_len % 4 ) */
-        /*    array_name_len += 4 - (array_name_len % 4); */
+        if ( array_name_len % 4 )
+            array_name_len += 4 - (array_name_len % 4);
 
         z->next_in = ZLIB_BYTE_PTR(uncomp_buf);
         z->avail_in = 8;
@@ -3141,10 +3082,10 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
 
     if ( matvar == NULL )
         return MATIO_E_BAD_ARGUMENT;
-    if ( matvar->rank == 0 ) /* An empty data set */
+    else if ( matvar->rank == 0 ) /* An empty data set */
         return MATIO_E_NO_ERROR;
 #if HAVE_ZLIB
-    if ( NULL != matvar->internal->data ) {
+    else if ( NULL != matvar->internal->data ) {
         /* Data already read in ReadNextStructField or ReadNextCell */
         matvar->data = matvar->internal->data;
         matvar->internal->data = NULL;
@@ -3231,9 +3172,6 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
             (void)fseeko((FILE *)mat->fp, matvar->internal->datapos, SEEK_SET);
             if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
 #if HAVE_ZLIB
-                if ( matvar->internal->z == NULL ) {
-                    break;
-                }
                 matvar->internal->z->avail_in = 0;
                 err = Inflate(mat, matvar->internal->z, tag, 4, &bytesread);
                 if ( err ) {
@@ -3288,21 +3226,22 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                 break;
             }
             if ( 0 == matvar->nbytes ) {
-                break;
+                matvar->data = calloc(1, 1);
+            } else {
+                matvar->data = calloc(matvar->nbytes, 1);
             }
-            matvar->data = calloc(matvar->nbytes, 1);
             if ( NULL == matvar->data ) {
                 err = MATIO_E_OUT_OF_MEMORY;
                 Mat_Critical("Couldn't allocate memory for the data");
+                break;
+            }
+            if ( 0 == matvar->nbytes ) {
                 break;
             }
             {
                 size_t nbytes = 0;
                 err = Mul(&nbytes, nelems, matvar->data_size);
                 if ( err || nbytes > matvar->nbytes ) {
-                    free(matvar->data);
-                    matvar->data = NULL;
-                    matvar->nbytes = 0;
                     break;
                 }
             }
@@ -3533,6 +3472,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                     packed_type = TYPE_FROM_TAG(tag[0]);
                     if ( tag[0] & 0xffff0000 ) { /* Data is in the tag */
                         data_in_tag = 1;
+                        nBytes = (tag[0] & 0xffff0000) >> 16;
                     } else {
                         data_in_tag = 0;
                         err = Read(tag + 1, 4, 1, (FILE *)mat->fp, &bytesread);
@@ -3542,6 +3482,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                         }
                         if ( byteswap )
                             (void)Mat_uint32Swap(tag + 1);
+                        nBytes = tag[1];
                     }
 #if defined(EXTENDED_SPARSE)
                     switch ( matvar->data_type ) {
@@ -3590,7 +3531,6 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                                                    packed_type, sparse->ndata);
                             break;
                         default:
-                            nBytes = (data_in_tag == 0) ? tag[1] : ((tag[0] & 0xffff0000) >> 16);
                             break;
                     }
 #else  /* EXTENDED_SPARSE */
@@ -3685,6 +3625,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                     packed_type = TYPE_FROM_TAG(tag[0]);
                     if ( tag[0] & 0xffff0000 ) { /* Data is in the tag */
                         data_in_tag = 1;
+                        nBytes = (tag[0] & 0xffff0000) >> 16;
                     } else {
                         data_in_tag = 0;
                         err = Inflate(mat, matvar->internal->z, tag + 1, 4, NULL);
@@ -3694,6 +3635,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                         }
                         if ( byteswap )
                             (void)Mat_uint32Swap(tag + 1);
+                        nBytes = tag[1];
                     }
 #if defined(EXTENDED_SPARSE)
                     switch ( matvar->data_type ) {
@@ -3752,7 +3694,6 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                                                              packed_type, sparse->ndata);
                             break;
                         default:
-                            nBytes = (data_in_tag == 0) ? tag[1] : ((tag[0] & 0xffff0000) >> 16);
                             break;
                     }
 #else  /* EXTENDED_SPARSE */
@@ -3774,15 +3715,13 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                     Mat_Critical("Integer multiplication overflow");
                     break;
                 }
-                if ( nbytes > 0 ) {
-                    sparse->data = malloc(nbytes);
-                    if ( sparse->data == NULL ) {
-                        err = MATIO_E_OUT_OF_MEMORY;
-                        Mat_Critical("Couldn't allocate memory for the sparse data");
-                        break;
-                    }
+                sparse->data = malloc(nbytes);
+                if ( sparse->data == NULL ) {
+                    err = MATIO_E_OUT_OF_MEMORY;
+                    Mat_Critical("Couldn't allocate memory for the sparse data");
+                    break;
                 }
-                if ( matvar->compression == MAT_COMPRESSION_NONE && nbytes > 0 ) {
+                if ( matvar->compression == MAT_COMPRESSION_NONE ) {
 #if defined(EXTENDED_SPARSE)
                     switch ( matvar->data_type ) {
                         case MAT_T_DOUBLE:
@@ -3842,7 +3781,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
                     if ( (nBytes % 8) != 0 )
                         (void)fseeko((FILE *)mat->fp, 8 - (nBytes % 8), SEEK_CUR);
 #if HAVE_ZLIB
-                } else if ( matvar->compression == MAT_COMPRESSION_ZLIB && nbytes > 0 ) {
+                } else if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
 #if defined(EXTENDED_SPARSE)
                     switch ( matvar->data_type ) {
                         case MAT_T_DOUBLE:
@@ -3909,11 +3848,6 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
 #endif /* EXTENDED_SPARSE */
                     if ( data_in_tag )
                         nBytes += 4;
-                    if ( (nBytes % 8) != 0 )
-                        err = InflateSkip(mat, matvar->internal->z, 8 - (nBytes % 8), NULL);
-                } else if ( matvar->compression == MAT_COMPRESSION_ZLIB ) {
-                    if ( data_in_tag )
-                        nBytes = 4;
                     if ( (nBytes % 8) != 0 )
                         err = InflateSkip(mat, matvar->internal->z, 8 - (nBytes % 8), NULL);
 #endif /* HAVE_ZLIB */
@@ -4954,23 +4888,23 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
     int array_flags_type = MAT_T_UINT32, dims_array_type = MAT_T_INT32;
     int array_flags_size = 8, matrix_type = MAT_T_MATRIX;
     const mat_uint32_t pad4 = 0;
-    int nBytes, nzmax = 0;
+    int nBytes, i, nzmax = 0;
     mat_off_t start = 0, end = 0;
 
-    if ( NULL == mat || NULL == matvar )
+    if ( NULL == mat )
         return MATIO_E_BAD_ARGUMENT;
-    if ( NULL == matvar->name )
-        return MATIO_E_OUTPUT_BAD_DATA;
 
     /* FIXME: SEEK_END is not Guaranteed by the C standard */
     (void)fseeko((FILE *)mat->fp, 0, SEEK_END); /* Always write at end of file */
+
+    if ( NULL == matvar || NULL == matvar->name )
+        return MATIO_E_BAD_ARGUMENT;
 
 #if HAVE_ZLIB
     if ( compress == MAT_COMPRESSION_NONE ) {
 #else
     {
 #endif
-        int i;
         fwrite(&matrix_type, 4, 1, (FILE *)mat->fp);
         fwrite(&pad4, 4, 1, (FILE *)mat->fp);
         start = ftello((FILE *)mat->fp);
@@ -5039,8 +4973,8 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
     } else if ( compress == MAT_COMPRESSION_ZLIB ) {
         mat_uint32_t comp_buf[512];
         mat_uint32_t uncomp_buf[512];
-        int buf_size = 512, err, i;
-        size_t matrix_max_buf_size;
+        int buf_size = 512, err;
+        size_t byteswritten = 0, matrix_max_buf_size;
         z_streamp z;
 
         z = (z_streamp)calloc(1, sizeof(*z));
@@ -5069,7 +5003,7 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
         if ( matvar->class_type == MAT_C_SPARSE )
             nzmax = ((mat_sparse_t *)matvar->data)->nzmax;
 
-        memset(uncomp_buf, 0, sizeof(uncomp_buf));
+        memset(&uncomp_buf, 0, sizeof(uncomp_buf));
         uncomp_buf[0] = MAT_T_MATRIX;
         err = GetMatrixMaxBufSize(matvar, &matrix_max_buf_size);
         if ( err ) {
@@ -5087,7 +5021,8 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
             z->next_out = ZLIB_BYTE_PTR(comp_buf);
             z->avail_out = buf_size * sizeof(*comp_buf);
             deflate(z, Z_NO_FLUSH);
-            fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
+            byteswritten +=
+                fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
         } while ( z->avail_out == 0 );
         uncomp_buf[0] = array_flags_type;
         uncomp_buf[1] = array_flags_size;
@@ -5113,7 +5048,8 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
             z->next_out = ZLIB_BYTE_PTR(comp_buf);
             z->avail_out = buf_size * sizeof(*comp_buf);
             deflate(z, Z_NO_FLUSH);
-            fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
+            byteswritten +=
+                fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
         } while ( z->avail_out == 0 );
         /* Name of variable */
         if ( strlen(matvar->name) <= 4 ) {
@@ -5123,8 +5059,8 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
             memset(uncomp_buf, 0, 8);
             uncomp_buf[0] = (array_name_len << 16) | array_name_type;
             memcpy(uncomp_buf + 1, matvar->name, array_name_len);
-            /* if ( array_name_len % 4 ) */
-            /*     array_name_len += 4 - (array_name_len % 4); */
+            if ( array_name_len % 4 )
+                array_name_len += 4 - (array_name_len % 4);
 
             z->next_in = ZLIB_BYTE_PTR(uncomp_buf);
             z->avail_in = 8;
@@ -5132,7 +5068,8 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
                 z->next_out = ZLIB_BYTE_PTR(comp_buf);
                 z->avail_out = buf_size * sizeof(*comp_buf);
                 deflate(z, Z_NO_FLUSH);
-                fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
+                byteswritten += fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out,
+                                       (FILE *)mat->fp);
             } while ( z->avail_out == 0 );
         } else {
             mat_uint32_t array_name_len = (mat_uint32_t)strlen(matvar->name);
@@ -5150,7 +5087,8 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
                 z->next_out = ZLIB_BYTE_PTR(comp_buf);
                 z->avail_out = buf_size * sizeof(*comp_buf);
                 deflate(z, Z_NO_FLUSH);
-                fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
+                byteswritten += fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out,
+                                       (FILE *)mat->fp);
             } while ( z->avail_out == 0 );
         }
         if ( NULL != matvar->internal ) {
@@ -5171,17 +5109,23 @@ Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress)
             z->next_out = ZLIB_BYTE_PTR(comp_buf);
             z->avail_out = buf_size * sizeof(*comp_buf);
             err = deflate(z, Z_FINISH);
-            fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
+            byteswritten +=
+                fwrite(comp_buf, 1, buf_size * sizeof(*comp_buf) - z->avail_out, (FILE *)mat->fp);
         } while ( err != Z_STREAM_END && z->avail_out == 0 );
+#if 0
+        if ( byteswritten % 8 )
+            for ( i = 0; i < 8-(byteswritten % 8); i++ )
+                fwrite(&pad1,1,1,(FILE*)mat->fp);
+#endif
         (void)deflateEnd(z);
         free(z);
 #endif
     }
     end = ftello((FILE *)mat->fp);
     if ( start != -1L && end != -1L ) {
-        const mat_uint32_t _nBytes = (mat_uint32_t)(end - start);
-        (void)fseeko((FILE *)mat->fp, start - 4, SEEK_SET);
-        fwrite(&_nBytes, 4, 1, (FILE *)mat->fp);
+        nBytes = (int)(end - start);
+        (void)fseeko((FILE *)mat->fp, (mat_off_t) - (nBytes + 4), SEEK_CUR);
+        fwrite(&nBytes, 4, 1, (FILE *)mat->fp);
         (void)fseeko((FILE *)mat->fp, end, SEEK_SET);
     } else {
         Mat_Critical("Couldn't determine file position");
@@ -5202,7 +5146,7 @@ matvar_t *
 Mat_VarReadNextInfo5(mat_t *mat)
 {
     int err;
-    mat_uint32_t data_type, nBytes;
+    mat_uint32_t data_type, array_flags, nBytes;
     mat_off_t fpos;
     matvar_t *matvar = NULL;
 
@@ -5234,9 +5178,10 @@ Mat_VarReadNextInfo5(mat_t *mat)
         case MAT_T_COMPRESSED: {
 #if HAVE_ZLIB
             mat_uint32_t uncomp_buf[16];
+            int nbytes;
             size_t bytesread = 0;
 
-            memset(uncomp_buf, 0, sizeof(uncomp_buf));
+            memset(&uncomp_buf, 0, sizeof(uncomp_buf));
             matvar = Mat_VarCalloc();
             if ( NULL == matvar ) {
                 Mat_Critical("Couldn't allocate memory");
@@ -5255,15 +5200,11 @@ Mat_VarReadNextInfo5(mat_t *mat)
 
             /* Read variable tag */
             err = Inflate(mat, matvar->internal->z, uncomp_buf, 8, &bytesread);
-            if ( err ) {
-                Mat_VarFree(matvar);
-                matvar = NULL;
-                break;
-            }
             if ( mat->byteswap ) {
                 (void)Mat_uint32Swap(uncomp_buf);
                 (void)Mat_uint32Swap(uncomp_buf + 1);
             }
+            nbytes = uncomp_buf[1];
             if ( uncomp_buf[0] != MAT_T_MATRIX ) {
                 (void)fseeko((FILE *)mat->fp, (mat_off_t)(nBytes - bytesread), SEEK_CUR);
                 Mat_VarFree(matvar);
@@ -5285,7 +5226,7 @@ Mat_VarReadNextInfo5(mat_t *mat)
             }
             /* Array flags */
             if ( uncomp_buf[0] == MAT_T_UINT32 ) {
-                mat_uint32_t array_flags = uncomp_buf[2];
+                array_flags = uncomp_buf[2];
                 matvar->class_type = CLASS_FROM_ARRAY_FLAGS(array_flags);
                 matvar->isComplex = (array_flags & MAT_F_COMPLEX);
                 matvar->isGlobal = (array_flags & MAT_F_GLOBAL);
@@ -5321,7 +5262,7 @@ Mat_VarReadNextInfo5(mat_t *mat)
                 if ( uncomp_buf[0] == MAT_T_INT32 ) {
                     int j;
                     size_t size;
-                    int nbytes = uncomp_buf[1];
+                    nbytes = uncomp_buf[1];
                     matvar->rank = nbytes / 4;
                     if ( 0 == do_clean && matvar->rank > 13 ) {
                         int rank = matvar->rank;
@@ -5456,7 +5397,7 @@ Mat_VarReadNextInfo5(mat_t *mat)
 
             /* Array flags */
             if ( buf[0] == MAT_T_UINT32 || buf[0] == MAT_T_INT32 ) { /* Also allow INT32 for SWAN */
-                mat_uint32_t array_flags = buf[2];
+                array_flags = buf[2];
                 matvar->class_type = CLASS_FROM_ARRAY_FLAGS(array_flags);
                 matvar->isComplex = (array_flags & MAT_F_COMPLEX);
                 matvar->isGlobal = (array_flags & MAT_F_GLOBAL);

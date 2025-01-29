@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2008-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -25,8 +25,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MAT4_H
-#define MAT4_H
+#ifndef MAT5_H
+#define MAT5_H
 
 #ifdef __cplusplus
 #define EXTERN extern "C"
@@ -34,14 +34,14 @@
 #define EXTERN extern
 #endif
 
-EXTERN mat_t *Mat_Create4(const char *matname);
+EXTERN mat_t *Mat_Create5(const char *matname, const char *hdr_str);
 
-EXTERN int Mat_VarWrite4(const mat_t *mat, const matvar_t *matvar);
-EXTERN int Mat_VarRead4(mat_t *mat, matvar_t *matvar);
-EXTERN int Mat_VarReadData4(mat_t *mat, const matvar_t *matvar, void *data, const int *start,
+EXTERN matvar_t *Mat_VarReadNextInfo5(mat_t *mat);
+EXTERN int Mat_VarRead5(mat_t *mat, matvar_t *matvar);
+EXTERN int Mat_VarReadData5(mat_t *mat, matvar_t *matvar, void *data, const int *start,
                             const int *stride, const int *edge);
-EXTERN int Mat_VarReadDataLinear4(mat_t *mat, matvar_t *matvar, void *data, int start, int stride,
+EXTERN int Mat_VarReadDataLinear5(mat_t *mat, matvar_t *matvar, void *data, int start, int stride,
                                   int edge);
-EXTERN matvar_t *Mat_VarReadNextInfo4(mat_t *mat);
+EXTERN int Mat_VarWrite5(mat_t *mat, matvar_t *matvar, int compress);
 
 #endif

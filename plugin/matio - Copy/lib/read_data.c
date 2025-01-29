@@ -3,7 +3,7 @@
  * @ingroup MAT
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -32,11 +32,7 @@
 /* FIXME: Implement Unicode support */
 #include "matio_private.h"
 #if HAVE_ZLIB
-	#ifdef _WIN32
-	#include <plugin/z/lib/zlib.h>
-	#else
-	#include <zlib.h>
-	#endif
+//#include <zlib.h>
 #endif
 #include <stddef.h>
 #include <stdlib.h>

@@ -3,7 +3,7 @@
  * @ingroup MAT
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -639,9 +639,6 @@ Mat_Open(const char *matname, int mode)
             mat = NULL;
         }
 
-        if ( NULL == mat )
-            return mat;
-
         if ( -1 < *(hid_t *)mat->fp ) {
             H5G_info_t group_info;
             herr_t herr;
@@ -789,7 +786,7 @@ Mat_GetVersion(const mat_t *mat)
  * @param[out] n Number of variables in the given MAT file
  * @return Array of variable names
  */
-char *const *
+char **
 Mat_GetDir(mat_t *mat, size_t *n)
 {
     char **dir = NULL;
@@ -1186,56 +1183,43 @@ Mat_VarCreate(const char *name, enum matio_classes class_type, enum matio_types 
         matvar->data = (void *)data;
         matvar->mem_conserve = 1;
     } else if ( MAT_C_SPARSE == matvar->class_type ) {
-        const mat_sparse_t *sparse_data_in = (const mat_sparse_t *)data;
-        mat_sparse_t *sparse_data = (mat_sparse_t *)malloc(sizeof(mat_sparse_t));
+        mat_sparse_t *sparse_data;
+        const mat_sparse_t *sparse_data_in;
+
+        sparse_data_in = (const mat_sparse_t *)data;
+        sparse_data = (mat_sparse_t *)malloc(sizeof(mat_sparse_t));
         if ( NULL != sparse_data ) {
             sparse_data->nzmax = sparse_data_in->nzmax;
             sparse_data->nir = sparse_data_in->nir;
             sparse_data->njc = sparse_data_in->njc;
             sparse_data->ndata = sparse_data_in->ndata;
-            if ( NULL != sparse_data_in->ir ) {
-                sparse_data->ir =
-                    (mat_uint32_t *)malloc(sparse_data->nir * sizeof(*sparse_data->ir));
-                if ( NULL != sparse_data->ir )
-                    memcpy(sparse_data->ir, sparse_data_in->ir,
-                           sparse_data->nir * sizeof(*sparse_data->ir));
-            } else {
-                sparse_data->ir = NULL;
-            }
-            if ( NULL != sparse_data_in->jc ) {
-                sparse_data->jc =
-                    (mat_uint32_t *)malloc(sparse_data->njc * sizeof(*sparse_data->jc));
-                if ( NULL != sparse_data->jc )
-                    memcpy(sparse_data->jc, sparse_data_in->jc,
-                           sparse_data->njc * sizeof(*sparse_data->jc));
-            } else {
-                sparse_data->jc = NULL;
-            }
-            if ( NULL != sparse_data_in->data ) {
-                if ( matvar->isComplex ) {
-                    sparse_data->data = malloc(sizeof(mat_complex_split_t));
-                    if ( NULL != sparse_data->data ) {
-                        mat_complex_split_t *complex_data =
-                            (mat_complex_split_t *)sparse_data->data;
-                        const mat_complex_split_t *complex_data_in =
-                            (mat_complex_split_t *)sparse_data_in->data;
-                        complex_data->Re = malloc(sparse_data->ndata * data_size);
-                        complex_data->Im = malloc(sparse_data->ndata * data_size);
-                        if ( NULL != complex_data->Re )
-                            memcpy(complex_data->Re, complex_data_in->Re,
-                                   sparse_data->ndata * data_size);
-                        if ( NULL != complex_data->Im )
-                            memcpy(complex_data->Im, complex_data_in->Im,
-                                   sparse_data->ndata * data_size);
-                    }
-                } else {
-                    sparse_data->data = malloc(sparse_data->ndata * data_size);
-                    if ( NULL != sparse_data->data )
-                        memcpy(sparse_data->data, sparse_data_in->data,
+            sparse_data->ir = (mat_uint32_t *)malloc(sparse_data->nir * sizeof(*sparse_data->ir));
+            if ( NULL != sparse_data->ir )
+                memcpy(sparse_data->ir, sparse_data_in->ir,
+                       sparse_data->nir * sizeof(*sparse_data->ir));
+            sparse_data->jc = (mat_uint32_t *)malloc(sparse_data->njc * sizeof(*sparse_data->jc));
+            if ( NULL != sparse_data->jc )
+                memcpy(sparse_data->jc, sparse_data_in->jc,
+                       sparse_data->njc * sizeof(*sparse_data->jc));
+            if ( matvar->isComplex ) {
+                sparse_data->data = malloc(sizeof(mat_complex_split_t));
+                if ( NULL != sparse_data->data ) {
+                    mat_complex_split_t *complex_data, *complex_data_in;
+                    complex_data = (mat_complex_split_t *)sparse_data->data;
+                    complex_data_in = (mat_complex_split_t *)sparse_data_in->data;
+                    complex_data->Re = malloc(sparse_data->ndata * data_size);
+                    complex_data->Im = malloc(sparse_data->ndata * data_size);
+                    if ( NULL != complex_data->Re )
+                        memcpy(complex_data->Re, complex_data_in->Re,
+                               sparse_data->ndata * data_size);
+                    if ( NULL != complex_data->Im )
+                        memcpy(complex_data->Im, complex_data_in->Im,
                                sparse_data->ndata * data_size);
                 }
             } else {
-                sparse_data->data = NULL;
+                sparse_data->data = malloc(sparse_data->ndata * data_size);
+                if ( NULL != sparse_data->data )
+                    memcpy(sparse_data->data, sparse_data_in->data, sparse_data->ndata * data_size);
             }
         }
         matvar->data = sparse_data;
@@ -1275,7 +1259,7 @@ Mat_CopyFile(const char *src, const char *dst)
 {
     size_t len;
     char buf[BUFSIZ] = {'\0'};
-    FILE *in;
+    FILE *in = NULL;
     FILE *out = NULL;
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -1284,8 +1268,6 @@ Mat_CopyFile(const char *src, const char *dst)
         if ( NULL != wname ) {
             in = _wfopen(wname, L"rb");
             free(wname);
-        } else {
-            in = NULL;
         }
     }
 #else
@@ -1388,7 +1370,7 @@ Mat_VarDelete(mat_t *mat, const char *name)
                 char *new_name = strdup(mat->filename);
 #if defined(MAT73) && MAT73
                 if ( mat_file_ver == MAT_FT_MAT73 ) {
-                    /* err = */ Mat_Close73(mat);
+                    err = Mat_Close73(mat);
                 }
 #endif
                 if ( mat->fp != NULL ) {
@@ -1491,9 +1473,6 @@ Mat_VarDuplicate(const matvar_t *in, int opt)
     matvar_t *out;
     size_t i;
 
-    if ( in == NULL )
-        return NULL;
-
     out = Mat_VarCalloc();
     if ( out == NULL )
         return NULL;
@@ -1580,8 +1559,7 @@ Mat_VarDuplicate(const matvar_t *in, int opt)
                         out_sparse->data = malloc(sizeof(mat_complex_split_t));
                         if ( out_sparse->data != NULL ) {
                             mat_complex_split_t *out_data = (mat_complex_split_t *)out_sparse->data;
-                            const mat_complex_split_t *in_data =
-                                (mat_complex_split_t *)in_sparse->data;
+                            mat_complex_split_t *in_data = (mat_complex_split_t *)in_sparse->data;
                             out_data->Re = malloc(in_sparse->ndata * Mat_SizeOf(in->data_type));
                             if ( NULL != out_data->Re )
                                 memcpy(out_data->Re, in_data->Re,
@@ -1596,15 +1574,13 @@ Mat_VarDuplicate(const matvar_t *in, int opt)
                         if ( NULL != out_sparse->data )
                             memcpy(out_sparse->data, in_sparse->data,
                                    in_sparse->ndata * Mat_SizeOf(in->data_type));
-                    } else {
-                        out_sparse->data = NULL;
                     }
                 }
             } else if ( out->isComplex ) {
                 out->internal->data = malloc(sizeof(mat_complex_split_t));
                 if ( out->internal->data != NULL ) {
                     mat_complex_split_t *out_data = (mat_complex_split_t *)out->internal->data;
-                    const mat_complex_split_t *in_data = (mat_complex_split_t *)in->internal->data;
+                    mat_complex_split_t *in_data = (mat_complex_split_t *)in->internal->data;
                     out_data->Re = malloc(out->nbytes);
                     if ( NULL != out_data->Re )
                         memcpy(out_data->Re, in_data->Re, out->nbytes);
@@ -1624,23 +1600,31 @@ Mat_VarDuplicate(const matvar_t *in, int opt)
 
     if ( !opt ) {
         out->data = in->data;
-    } else if ( in->data != NULL &&
-                (in->class_type == MAT_C_STRUCT || in->class_type == MAT_C_CELL ||
-                 in->class_type == MAT_C_FUNCTION) ) {
+    } else if ( (in->data != NULL) && (in->class_type == MAT_C_STRUCT) ) {
         out->data = malloc(in->nbytes);
         if ( out->data != NULL && in->data_size > 0 ) {
-            const size_t ndata = in->nbytes / in->data_size;
-            const matvar_t *const *indata = (const matvar_t *const *)in->data;
-            const matvar_t **outdata = (const matvar_t **)out->data;
-            for ( i = 0; i < ndata; i++ ) {
-                outdata[i] = Mat_VarDuplicate(indata[i], opt);
+            size_t nfields = in->nbytes / in->data_size;
+            matvar_t **infields = (matvar_t **)in->data;
+            matvar_t **outfields = (matvar_t **)out->data;
+            for ( i = 0; i < nfields; i++ ) {
+                outfields[i] = Mat_VarDuplicate(infields[i], opt);
             }
         }
-    } else if ( in->data != NULL && in->class_type == MAT_C_SPARSE ) {
+    } else if ( (in->data != NULL) && (in->class_type == MAT_C_CELL) ) {
+        out->data = malloc(in->nbytes);
+        if ( out->data != NULL && in->data_size > 0 ) {
+            size_t nelems = in->nbytes / in->data_size;
+            matvar_t **incells = (matvar_t **)in->data;
+            matvar_t **outcells = (matvar_t **)out->data;
+            for ( i = 0; i < nelems; i++ ) {
+                outcells[i] = Mat_VarDuplicate(incells[i], opt);
+            }
+        }
+    } else if ( (in->data != NULL) && (in->class_type == MAT_C_SPARSE) ) {
         out->data = malloc(sizeof(mat_sparse_t));
         if ( out->data != NULL ) {
             mat_sparse_t *out_sparse = (mat_sparse_t *)out->data;
-            const mat_sparse_t *in_sparse = (mat_sparse_t *)in->data;
+            mat_sparse_t *in_sparse = (mat_sparse_t *)in->data;
             out_sparse->nzmax = in_sparse->nzmax;
             out_sparse->nir = in_sparse->nir;
             out_sparse->ir = (mat_uint32_t *)malloc(in_sparse->nir * sizeof(*out_sparse->ir));
@@ -1675,7 +1659,7 @@ Mat_VarDuplicate(const matvar_t *in, int opt)
                 out_sparse->data = NULL;
             }
         }
-    } else if ( in->data != NULL && in->nbytes != 0 ) {
+    } else if ( in->data != NULL ) {
         if ( out->isComplex ) {
             out->data = malloc(sizeof(mat_complex_split_t));
             if ( out->data != NULL ) {
@@ -2243,14 +2227,12 @@ Mat_VarPrint(const matvar_t *matvar, int printdata)
         int err = Mul(&nelems_x_nfields, nelems, nfields);
         if ( MATIO_E_NO_ERROR == err && nelems_x_nfields > 0 ) {
             printf("Fields[%" SIZE_T_FMTSTR "] {\n", nelems_x_nfields);
-            if ( NULL != matvar->internal->fieldnames && NULL != fields ) {
-                for ( i = 0; i < nelems_x_nfields; i++ ) {
-                    if ( NULL == fields[i] ) {
-                        printf("      Name: %s\n      Rank: %d\n",
-                               matvar->internal->fieldnames[i % nfields], 0);
-                    } else {
-                        Mat_VarPrint(fields[i], printdata);
-                    }
+            for ( i = 0; i < nelems_x_nfields; i++ ) {
+                if ( NULL == fields[i] ) {
+                    printf("      Name: %s\n      Rank: %d\n",
+                           matvar->internal->fieldnames[i % nfields], 0);
+                } else {
+                    Mat_VarPrint(fields[i], printdata);
                 }
             }
             printf("}\n");
@@ -2434,19 +2416,13 @@ Mat_VarPrint(const matvar_t *matvar, int printdata)
                     break;
 #endif
                 sparse = (mat_sparse_t *)matvar->data;
-                if ( sparse == NULL || sparse->ndata == 0 || sparse->nir == 0 || sparse->njc == 0 ||
-                     sparse->data == NULL ) {
-                    break;
-                }
                 if ( matvar->isComplex ) {
                     mat_complex_split_t *complex_data = (mat_complex_split_t *)sparse->data;
                     const char *re = (const char *)complex_data->Re;
                     const char *im = (const char *)complex_data->Im;
                     for ( i = 0; i < (size_t)sparse->njc - 1; i++ ) {
                         for ( j = sparse->jc[i];
-                              j < (size_t)sparse->jc[i + 1] && j < (size_t)sparse->ndata &&
-                              j < (size_t)sparse->nir;
-                              j++ ) {
+                              j < (size_t)sparse->jc[i + 1] && j < (size_t)sparse->ndata; j++ ) {
                             printf("    (%u,%" SIZE_T_FMTSTR ")  ", sparse->ir[j] + 1, i + 1);
                             Mat_PrintNumber(matvar->data_type, re + j * stride);
                             printf(" + ");
@@ -2489,8 +2465,7 @@ Mat_VarPrint(const matvar_t *matvar, int printdata)
  * @retval 0 on success
  */
 int
-Mat_VarReadData(mat_t *mat, matvar_t *matvar, void *data, const int *start, const int *stride,
-                const int *edge)
+Mat_VarReadData(mat_t *mat, matvar_t *matvar, void *data, int *start, int *stride, int *edge)
 {
     int err = MATIO_E_NO_ERROR;
 
@@ -2668,14 +2643,12 @@ Mat_VarReadNextInfoPredicate(mat_t *mat, mat_iter_pred_t pred, const void *user_
     return matvar;
 }
 
-#if defined(MAT73) && MAT73
 static int
 Mat_IteratorNameAcceptor(const char *name, const void *user_data)
 {
     const char *required_name = (const char *)user_data;
     return (NULL != name) && (NULL != required_name) && 0 == strcmp(name, required_name);
 }
-#endif
 
 /** @brief Reads the information of a variable with the given name from a MAT file
  *
@@ -2867,7 +2840,7 @@ Mat_VarReadNextPredicate(mat_t *mat, mat_iter_pred_t pred, const void *user_data
  * @see Mat_VarWrite/Mat_VarWriteAppend
  */
 int
-Mat_VarWriteInfo(const mat_t *mat, matvar_t *matvar)
+Mat_VarWriteInfo(mat_t *mat, matvar_t *matvar)
 {
     Mat_Critical(
         "Mat_VarWriteInfo/Mat_VarWriteData is not supported. "
@@ -2892,8 +2865,8 @@ Mat_VarWriteInfo(const mat_t *mat, matvar_t *matvar)
  * @see Mat_VarWrite/Mat_VarWriteAppend
  */
 int
-Mat_VarWriteData(const mat_t *mat, matvar_t *matvar, void *data, const int *start,
-                 const int *stride, const int *edge)
+Mat_VarWriteData(mat_t *mat, matvar_t *matvar, void *data, const int *start, const int *stride,
+                 const int *edge)
 {
     Mat_Critical(
         "Mat_VarWriteInfo/Mat_VarWriteData is not supported. "
@@ -2927,7 +2900,7 @@ Mat_VarWrite(mat_t *mat, matvar_t *matvar, enum matio_compression compress)
         (void)Mat_GetDir(mat, &n);
     }
 
-    if ( NULL != mat->dir ) {
+    {
         /* Error if MAT variable already exists in MAT file */
         size_t i;
         for ( i = 0; i < mat->num_datasets; i++ ) {

@@ -4,6 +4,8 @@
 #define _plugin_matio_matio_h_
 
 #include <plugin/matio/lib/matio.h>
+#include <Eigen/Eigen.h>
+
 
 namespace Upp {
 
@@ -36,52 +38,6 @@ template<> void inline GetTypeCode<const char *> (enum matio_classes &class_type
 	data_type  = MAT_T_UTF8;
 }
 
-template <class T>
-class MatMatrix {
-public:
-	MatMatrix() : rows(0), cols(0) 			{}
-	MatMatrix(int rows, int cols)  			{Alloc(rows, cols);}
-	MatMatrix(const Nuller&)               	{rows = cols = 0;}
-	bool IsNullInstance() const    			{return rows == 0 && cols == 0; }
-	
-	void Alloc(int size) {
-		data.Alloc(size); 
-		this->rows = size;
-		this->cols = 1;
-	}
-	void Alloc(int _rows, int _cols) {
-		data.Alloc(_rows*_cols); 
-		this->rows = _rows;
-		this->cols = _cols;	
-	}
-	void Clear() 							{data.Clear();}
-	
-	T &operator()(int r)					{return data[r];}
-	T &operator()(int r, int c)				{return data[c*rows + r];}
-	const T &operator()(int r) const		{return data[r];}
-	const T &operator()(int r, int c) const	{return data[c*rows + r];}
-		
-	operator T*()                    		{return data;}
-	operator const T*() const        		{return data;}
-		
-	int GetCount() const					{return rows*cols;}
-	int size() const						{return GetCount();}
-	int GetRows() const						{return rows;}
-	int GetCols() const						{return cols;}
-			
-	void Print() {
-		for(int r = 0; r < GetRows(); r++) {
-			Cout() << "\n";
-			for(int c = 0; c < GetCols(); c++)
-				Cout() << operator()(r, c) << "  ";
-		}	
-		Cout() << "\n";
-	}
-	
-//private:
-	Buffer<T> data;
-	int rows, cols;
-};
 
 class MatVar {
 public:
@@ -138,12 +94,12 @@ public:
 	bool IsLoaded() {return var != 0;}
 	
 	
-	void VarWriteStruct(String name, MatVar &val) {
+	void SetStruct(String name, MatVar &val) {
 		Mat_VarSetStructFieldByName(var, name, 0, val.var); 
 	}
 	
 	template <class T>
-	void VarWriteStruct(String name, void *data, int numRows, int numCols, int index) {
+	void SetStruct(String name, const void *data, int numRows, int numCols, int index) {
 		int numDim = 2;
 		if (IsNull(numCols)) 
 			numDim = 1;
@@ -157,33 +113,32 @@ public:
 		enum matio_types data_type;
 		GetTypeCode<T>(class_type, data_type);
 		
-		matvar_t *variable = Mat_VarCreate(name, class_type, data_type, numDim, dims, data, 0);
+		matvar_t *variable = Mat_VarCreate(name, class_type, data_type, numDim, dims, data, MAT_F_DONT_COPY_DATA);
 		Mat_VarSetStructFieldByName(var, name, index, variable); 
 	}
 
-	template <class T>
-	void VarWriteStruct(String name, MatMatrix<T> &data, int index = 0) {
-		VarWriteStruct<T>(name, data, data.GetRows(), data.GetCols(), index);
+	void SetStruct(String name, Eigen::MatrixXd &data, int index = 0) {
+		SetStruct<double>(name, data.data(), data.rows(), data.cols(), index);
 	}
 	
-	void VarWriteStruct(String name, String data, int index = 0) {
-		VarWriteStruct<String>(name, (void *)data.Begin(), 1, data.GetCount(), index);
+	void SetStruct(String name, String data, int index = 0) {
+		SetStruct<String>(name, (void *)data.Begin(), 1, data.GetCount(), index);
 	}
 
-	void VarWriteStruct(String name, const char *data, int index = 0) {
-		VarWriteStruct<String>(name, (void *)data, 1, (int)strlen(data), index);
+	void SetStruct(String name, const char *data, int index = 0) {
+		SetStruct<String>(name, (void *)data, 1, (int)strlen(data), index);
 	}
 
 	template <class T>
-	void VarWriteStruct(String name, T data, int index = 0) {
-		VarWriteStruct<T>(name, &data, 1, Null, index);
+	void SetStruct(String name, T data, int index = 0) {
+		SetStruct<T>(name, &data, 1, Null, index);
 	}
 	
 private:
 	MatVar(mat_t *mat, String name);
 	MatVar(matvar_t *var, bool del) {this->var = var; this->del = del;}
 	
-	matvar_t *var;
+	matvar_t *var = nullptr;
 	bool del;
 	
 	friend class MatFile;
@@ -191,7 +146,7 @@ private:
 	
 class MatFile {
 public:
-	MatFile() : mat(NULL), listVar(NULL), numVar(0) {}
+	MatFile() : mat(NULL), listVar(NULL), numVar(0) {Mat_LogInitFunc("Matio", LogFunc);}
 	~MatFile();
 	
 	bool Create(String fileName, mat_ft version = MAT_FT_MAT5);
@@ -241,8 +196,7 @@ public:
 		return listVar[id];
 	}
 	
-		
-	bool VarExists(String name) {
+	bool Exist(String name) {
 		GetVarList();
 		if (listVar == NULL)
 			return false;
@@ -268,7 +222,7 @@ public:
 	MatVar GetVar(String name) {return MatVar(mat, name);}
 
 	template <class T> inline
-	T VarRead(const MatVar &var) {
+	T Get(const MatVar &var) {
 		ASSERT(mat != NULL);
 	
 		T ret = Null;
@@ -290,24 +244,21 @@ public:
 		return ret;	
 	}
 	
-
 	template <class T> inline
-	T VarRead(String name) {
+	T Get(String name) {
 		MatVar var = GetVar(name);
 		if (IsNull(var))
-			return Null;
-		return VarRead<T>(var);
+			throw Exc("Matio: Var does not exist");
+		return Get<T>(var);
 	}
 	
 	template <class T>
-	MatMatrix<T> VarReadMat(MatVar &var) {
+	void Get(MatVar &var, Vector<T> &ret) {
 		ASSERT(mat != NULL);
-	
-		MatMatrix<T> ret;
 			
 		int numDim = var.GetDimCount();	
 		if (numDim > 2)
-			return ret;
+			throw Exc("Matio: Size is not 2");
 			
 		Buffer<int> start(numDim, 0);
 		Buffer<int> stride(numDim, 1);
@@ -316,24 +267,147 @@ public:
 		for (int i = 0; i < numDim; ++i)
 			edge[i] = var.GetDimCount(i);
 	
-		ret.Alloc((int)var.GetDimCount(0), (int)var.GetDimCount(1));
+		ret.SetCount((int)(var.GetDimCount(0)*(int)var.GetDimCount(1)));
 	
-		if (0 != Mat_VarReadData(mat, var.var, ret, start, stride, edge)) {
-			ret.Clear();
-			return ret;
-		}	
-		return ret;	
-	}	
+		if (0 != Mat_VarReadData(mat, var.var, ret.begin(), start, stride, edge)) 
+			throw Exc("Matio: Problem reading var");
+	}
+
+	template <class T>
+	void Get(String name, Vector<T> &ret) {
+		MatVar var = GetVar(name);
+		if (IsNull(var))
+			throw Exc("Matio: Var does not exist");
+		Get<T>(var, ret);
+	}
+	
+	void Get(MatVar &var, Eigen::VectorXd &ret) {
+		ASSERT(mat != NULL);
+			
+		int numDim = var.GetDimCount();	
+		if (numDim > 2)
+			throw Exc("Matio: Size is not 2");
+			
+		Buffer<int> start(numDim, 0);
+		Buffer<int> stride(numDim, 1);
+		Buffer<int> edge(numDim);
+	
+		for (int i = 0; i < numDim; ++i)
+			edge[i] = var.GetDimCount(i);
+	
+		ret.resize((int)(var.GetDimCount(0)*(int)var.GetDimCount(1)));
+	
+		if (0 != Mat_VarReadData(mat, var.var, ret.data(), start, stride, edge)) 
+			throw Exc("Matio: Problem reading var");
+	}
+
+	void Get(String name, Eigen::VectorXd &ret) {
+		MatVar var = GetVar(name);
+		if (IsNull(var))
+			throw Exc("Matio: Var does not exist");
+		Get(var, ret);
+	}
+	
+	void Get(MatVar &var, Eigen::MatrixXd &ret) {
+		ASSERT(mat != NULL);
+			
+		int numDim = var.GetDimCount();	
+		if (numDim > 2)
+			throw Exc("Matio: Size is not 2");
+			
+		Buffer<int> start(numDim, 0);
+		Buffer<int> stride(numDim, 1);
+		Buffer<int> edge(numDim);
+	
+		for (int i = 0; i < numDim; ++i)
+			edge[i] = var.GetDimCount(i);
+	
+		Buffer<double> d((int)var.GetDimCount(0)*(int)var.GetDimCount(1));
+		
+		if (0 != Mat_VarReadData(mat, var.var, d.Get(), start, stride, edge)) 
+			throw Exc("Matio: Problem reading var");
+		
+		CopyRowMajor(d.Get(), int(var.GetDimCount(0)), int(var.GetDimCount(1)), ret);
+	}
+	
+	void Get(String name, Eigen::MatrixXd &ret) {
+		MatVar var = GetVar(name);
+		if (IsNull(var))
+			throw Exc("Matio: Var does not exist");
+		Get(var, ret);
+	}
 	
 	template <class T>
-	MatMatrix<std::complex<T>> VarReadMatComplex(MatVar &var) {
+	void Get(MatVar &var, MultiDimMatrix<std::complex<T>> &ret) {
 		ASSERT(mat != NULL);
+			
+		int numDim = var.GetDimCount();	
+			
+		Buffer<int> start(numDim, 0);
+		Buffer<int> stride(numDim, 1);
+		Buffer<int> edge(numDim);
+		Vector<int> vedge(numDim);
+		
+		for (int i = 0; i < numDim; ++i)
+			edge[i] = vedge[i] = var.GetDimCount(i);
 	
-		MatMatrix<std::complex<T>> ret;
+		Buffer<double> real(var.GetCount()), imag(var.GetCount());
+	
+		struct mat_complex_split_t data = {real, imag};
+		
+		if (0 != Mat_VarReadData(mat, var.var, &data, start, stride, edge)) 
+			throw Exc("Matio: Problem reading var");
+		
+		ret.Resize(vedge);
+		for (int i = 0; i < ret.size(); ++i) {
+			ret.begin()[i].real(real[i]);
+			ret.begin()[i].imag(imag[i]);
+		}		
+	}	
+
+	template <class T>
+	void Get(String name, MultiDimMatrix<std::complex<T>> &ret) {
+		MatVar var = GetVar(name);
+		if (IsNull(var))
+			throw Exc("Matio: Var does not exist");
+		Get<T>(var, ret);
+	}
+	
+	template <class T>
+	typename std::enable_if<std::is_floating_point_v<T>>::type
+	Get(MatVar &var, MultiDimMatrix<T> &ret) {
+		ASSERT(mat != NULL);
+			
+		int numDim = var.GetDimCount();	
+			
+		Buffer<int> start(numDim, 0);
+		Buffer<int> stride(numDim, 1);
+		Buffer<int> edge(numDim);
+		Vector<int> vedge(numDim);
+		
+		for (int i = 0; i < numDim; ++i)
+			edge[i] = vedge[i] = var.GetDimCount(i);
+	
+		ret.Resize(vedge);
+	
+		if (0 != Mat_VarReadData(mat, var.var, ret.begin(), start, stride, edge))
+			throw Exc("Matio: Problem reading var");
+	}	
+
+	template <class T>
+	void Get(String name, MultiDimMatrix<T> &ret) {
+		MatVar var = GetVar(name);
+		if (IsNull(var))
+			throw Exc("Matio: Var does not exist");
+		Get<T>(var, ret);
+	}
+			
+	void Get(MatVar &var, Eigen::MatrixXcd &ret) {
+		ASSERT(mat != NULL);
 			
 		int numDim = var.GetDimCount();	
 		if (numDim > 2)
-			return ret;
+			throw Exc("Matio: Size is not 2");
 			
 		Buffer<int> start(numDim, 0);
 		Buffer<int> stride(numDim, 1);
@@ -342,54 +416,101 @@ public:
 		for (int i = 0; i < numDim; ++i)
 			edge[i] = var.GetDimCount(i);
 	
-		ret.Alloc((int)var.GetDimCount(0), (int)var.GetDimCount(1));
-	
-		Buffer<T> real(var.GetCount()), imag(var.GetCount());
+		Buffer<double> real(var.GetCount()), imag(var.GetCount());
 		
 		struct mat_complex_split_t data = {real, imag};
 		
-		if (0 != Mat_VarReadData(mat, var.var, &data, start, stride, edge)) {
-			ret.Clear();
-			return ret;
-		}	
-		
-		for (int i = 0; i < var.GetCount(); ++i) {
+		if (0 != Mat_VarReadData(mat, var.var, &data, start, stride, edge)) 
+			throw Exc("Matio: Problem reading var");
+
+		ret.resize(edge[0], edge[1]);		
+		for (int i = 0; i < ret.size(); ++i) {
 			ret(i).real(real[i]);
 			ret(i).imag(imag[i]);
 		}
-		return ret;	
 	}
 	
-	template <class T>
-	MatMatrix<T> VarReadMat(String name) {
+	void Get(String name, Eigen::MatrixXcd &ret) {
 		MatVar var = GetVar(name);
 		if (IsNull(var))
-			return Null;
-		return VarReadMat<T>(var);
+			throw Exc("Matio: Var does not exist");
+		Get(var, ret);
 	}
 	
-	bool VarWrite(MatVar &var, bool compression = true) {
+	void GetCell(String name, Vector<String> &ret) {
+		ret.Clear();
+	    matvar_t *cell_array = Mat_VarRead(mat, name);
+	    if (!cell_array) 
+	        throw Exc(Format(t_("Variable '%s' not found"), name));
+	      
+	    if (cell_array->class_type != MAT_C_CELL) {
+	        Mat_VarFree(cell_array);
+	        throw Exc(t_("Variable is not a cell array"));
+	    }
+	    size_t num = 1;
+	    for (int i = 0; i < cell_array->rank; i++) 
+	        num *= cell_array->dims[i];
+	    
+	    for (size_t i = 0; i < num; i++) {
+	        matvar_t *element = ((matvar_t **)cell_array->data)[i];
+	        if (!element)
+	            continue;
+	
+	        if (element->class_type == MAT_C_CHAR) {
+	            size_t total_chars = element->dims[0] * element->dims[1];
+	
+	            StringBuffer c_str(total_chars + 1);
+				if (element->data_type == MAT_T_UINT16) {
+		            uint16_t *matlab_str = (uint16_t*)element->data;
+		            for (size_t j = 0; j < total_chars; j++)
+		                c_str[j] = (char)matlab_str[j];
+				} else if (element->data_type == MAT_T_UTF8)
+		            memcpy(c_str, element->data, total_chars);
+				
+				c_str[total_chars] = '\0';
+				ret << String(c_str.begin(), total_chars);
+	        } else 
+	        	throw Exc(Format(t_("Cell element %d is not a string"), (int)i));
+	    }
+	    Mat_VarFree(cell_array);
+	}
+	
+	void SetCell(String name, const Vector<String> &strs, bool compression = false) {
+		size_t num = strs.size();
+		Buffer<matvar_t *> cell_elements(num);
+	
+	    for (size_t i = 0; i < num; i++) {
+	        const char *c_str = strs[i];
+	
+	        size_t dims[2] = {1, strlen(c_str)};
+	
+	        cell_elements[i] = Mat_VarCreate(NULL, MAT_C_CHAR, MAT_T_UTF8, 2, dims, c_str, MAT_F_DONT_COPY_DATA);
+	    }
+	    size_t cell_dims[2] = {num, 1};
+	
+	    matvar_t *cell_array = Mat_VarCreate(name, MAT_C_CELL, MAT_T_CELL, 2, cell_dims, cell_elements, MAT_F_DONT_COPY_DATA);
+	
+	    Mat_VarWrite(mat, cell_array, compression ? MAT_COMPRESSION_NONE : MAT_COMPRESSION_ZLIB);
+	
+	    for (size_t i = 0; i < num; i++) 
+	        Mat_VarFree(cell_elements[i]);
+	    
+	    Mat_VarFree(cell_array);
+	}	
+	
+	bool Set(MatVar &var, bool compression = true) {
 		if (0 != Mat_VarWrite(mat, var.var, compression ? MAT_COMPRESSION_NONE : MAT_COMPRESSION_ZLIB))
 			return false;
 		return true;
 	}
-		
+
 	template <class T>
-	bool VarWrite(String name, void *data, int numRows, int numCols, bool compression = true) {
-		int numDim = 2;
-		if (IsNull(numCols)) 
-			numDim = 1;
-			
-		Buffer<size_t> dims(numDim);
-		dims[0] = numRows;
-		if (!IsNull(numCols)) 
-			dims[1] = numCols;
-		
+	bool Set(String name, const void *data, const Buffer<size_t> &dims, int numDim, bool compression = true) {
 		enum matio_classes class_type;
 		enum matio_types data_type;
 		GetTypeCode<T>(class_type, data_type);
 		
-		if (VarExists(name))
+		if (Exist(name))
 			if (0 != Mat_VarDelete(mat, name))
 				return false;
 		matvar_t *var = Mat_VarCreate(name, class_type, data_type, numDim, dims, data, MAT_F_DONT_COPY_DATA);
@@ -401,32 +522,111 @@ public:
 	}
 	
 	template <class T>
-	bool VarWrite(String name, MatMatrix<T> &data, bool compression = true) {
-		return VarWrite<T>(name, data, data.GetRows(), data.GetCols(), compression);
+	bool Set(String name, const void *data, const Vector<int> &vdims, bool compression = true) {
+		Buffer<size_t> dims(vdims.size());
+		for (int i = 0; i < vdims.size(); ++i)
+			dims[i] = vdims[i];
+		
+		return Set<T>(name, data, dims, vdims.size(), compression);
+	}
+			
+	template <class T>
+	bool Set(String name, const void *data, int numRows, int numCols, bool compression = true) {
+		int numDim = 2;
+		if (IsNull(numCols)) 
+			numDim = 1;
+			
+		Buffer<size_t> dims(numDim);
+		dims[0] = numRows;
+		if (!IsNull(numCols)) 
+			dims[1] = numCols;
+		
+		return Set<T>(name, data, dims, numDim, compression);
 	}
 	
 	template <class T>
-	bool VarWrite(String name, T data, bool compression = true) {
-		return VarWrite<T>(name, &data, 1, Null, compression);
-	}
-	
-	bool VarWrite(String name, String data, bool compression = true) {
-		return VarWrite<String>(name, (void *)data.Begin(), 1, data.GetCount(), compression);
+	bool Set(String name, const Vector<T> &data, bool compression = true) {
+		return Set<T>(name, data, data.size(), Null, compression);
 	}
 
-	static String GetLastError()	{return cons.lastError;}
+	bool Set(String name, const Eigen::VectorXd &data, bool compression = true) {
+		return Set<double>(name, data.data(), data.size(), Null, compression);
+	}
 	
-	struct MatStatic {
-		MatStatic() {
-			Mat_LogInitFunc("Matio", LogFunc);
+	bool Set(String name, const Eigen::MatrixXd &data, bool compression = true) {
+		return Set<double>(name, data.data(), data.rows(), data.cols(), compression);
+	}
+
+	template <class T>
+	bool Set(String name, const MultiDimMatrix<std::complex<T>> &data, bool compression = true) {
+		Buffer<size_t> dims(data.GetNumAxis());
+		for (int i = 0; i < data.GetNumAxis(); ++i)
+			dims[i] = data.GetAxisDim(i);
+		return SetComplex<T>(name, data.begin(), dims, data.GetNumAxis(), compression);
+	}
+	
+	template <class T>
+	bool Set(String name, const MultiDimMatrix<T> &data, bool compression = true) {
+		Buffer<size_t> dims(data.GetNumAxis());
+		for (int i = 0; i < data.GetNumAxis(); ++i)
+			dims[i] = data.GetAxisDim(i);
+		return Set<T>(name, data.begin(), dims, data.GetNumAxis(), compression);
+	}
+	
+	bool Set(String name, String data, bool compression = true) {
+		return Set<String>(name, (void *)data.Begin(), 1, data.GetCount(), compression);
+	}
+	
+	bool Set(String name, const char *data, bool compression = true) {
+		return Set<String>(name, data, 1, strlen(data), compression);
+	}
+			
+	template <class T>
+	bool Set(String name, T data, bool compression = true) {
+		return Set<T>(name, &data, 1, Null, compression);
+	}
+	
+	template <class T>
+	bool SetComplex(String name, const void *data, const Buffer<size_t> &dims, int numDim, bool compression = true) {
+		enum matio_classes class_type;
+		enum matio_types data_type;
+		GetTypeCode<T>(class_type, data_type);
+		
+		if (Exist(name))
+			if (0 != Mat_VarDelete(mat, name))
+				return false;
+			
+		int sz = 1;
+		for (int i = 0; i < numDim; ++i)
+			sz *= dims[i];
+		Buffer<double> real(sz), imag(sz);
+		std::complex<T> *cdata = (std::complex<T>*)data;
+		for (int i = 0; i < sz; ++i) {
+			real[i] = cdata[i].real();
+			imag[i] = cdata[i].imag();
 		}
-		int logLevel;
-		String lastError;
-	};
+		
+		struct mat_complex_split_t sdata = {real, imag};
+		
+		matvar_t *var = Mat_VarCreate(name, class_type, data_type, numDim, dims, &sdata, MAT_F_DONT_COPY_DATA | MAT_F_COMPLEX);
+		if (var == NULL)
+			return false;
+		if (0 != Mat_VarWrite(mat, var, compression ? MAT_COMPRESSION_NONE : MAT_COMPRESSION_ZLIB))
+			return false;
+		return true;
+	}
+	
+	bool Set(String name, const Eigen::MatrixXcd &data, bool compression = true) {
+		Buffer<size_t> dims(2);
+		dims[0] = data.rows();
+		dims[1] = data.cols();
+		return SetComplex<double>(name, data.data(), dims, 2, compression);
+	}
+		
+	mat_t *mat = nullptr;
 	
 private:
-	mat_t *mat;
-	char **listVar;
+	char *const*listVar = nullptr;
 	size_t numVar;
 	
 	bool Open(String fileName, int mode) {
@@ -445,16 +645,13 @@ private:
 		listVar = Mat_GetDir(mat, &numVar);
 	}
 	
-	static MatStatic cons;
-	
 	static void LogFunc(int log_level, const char *message) {
-		cons.logLevel = log_level;
-		cons.lastError = message;
+		throw Exc(message);
 	}
 };
 
 template <> inline
-String MatFile::VarRead<String>(const MatVar &var) {
+String MatFile::Get<String>(const MatVar &var) {
 	ASSERT(mat != NULL);
 		
 	int numDim = var.GetDimCount();	
@@ -468,7 +665,7 @@ String MatFile::VarRead<String>(const MatVar &var) {
 	for (int i = 0; i < numDim; ++i)
 		edge[i] = var.GetDimCount(i);
 
-	String ret(0, 1 + var.GetDimCount(0)*var.GetDimCount(1));
+	StringBuffer ret(var.GetDimCount(0)*var.GetDimCount(1));
 
 	var.var->class_type = MAT_C_INT8;
 	var.var->data_type  = MAT_T_INT8;
@@ -478,16 +675,16 @@ String MatFile::VarRead<String>(const MatVar &var) {
 	
 	return ret;	
 }
+/*
+template <> inline
+void MatFile::Get(MatVar &var, MatMatrix<std::complex<float>> &ret) {Get<float>(var, ret);}
 
 template <> inline
-MatMatrix<std::complex<float>> MatFile::VarReadMat(MatVar &var) {return VarReadMatComplex<float>(var);}
+void MatFile::Get(MatVar &var, MatMatrix<std::complex<double>> &ret) {Get<double>(var, ret);}
 
 template <> inline
-MatMatrix<std::complex<double>> MatFile::VarReadMat(MatVar &var) {return VarReadMatComplex<double>(var);}
-
-template <> inline
-MatMatrix<std::complex<long double>> MatFile::VarReadMat(MatVar &var) {return VarReadMatComplex<long double>(var);}
-
+void MatFile::Get(MatVar &var, MatMatrix<std::complex<long double>> &ret) {Get<long double>(var, ret);}
+*/
 }
 	
 #endif

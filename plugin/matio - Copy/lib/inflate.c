@@ -3,7 +3,7 @@
  * @ingroup MAT
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -72,7 +72,7 @@ InflateSkip(mat_t *mat, z_streamp z, int nBytes, size_t *bytesread)
     }
     z->avail_out = n;
     z->next_out = uncomp_buf;
-    err = inflate(z, Z_NO_FLUSH);
+    err = inflate(z, Z_FULL_FLUSH);
     if ( err == Z_STREAM_END ) {
         return MATIO_E_NO_ERROR;
     } else if ( err != Z_OK ) {
@@ -103,7 +103,7 @@ InflateSkip(mat_t *mat, z_streamp z, int nBytes, size_t *bytesread)
             z->avail_in = (uInt)nbytes;
             z->next_in = comp_buf;
         }
-        err = inflate(z, Z_NO_FLUSH);
+        err = inflate(z, Z_FULL_FLUSH);
         if ( err == Z_STREAM_END ) {
             err = MATIO_E_NO_ERROR;
             break;
@@ -362,7 +362,7 @@ InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes)
     }
     z->avail_out = nBytes;
     z->next_out = ZLIB_BYTE_PTR(buf);
-    err = inflate(z, Z_NO_FLUSH);
+    err = inflate(z, Z_FULL_FLUSH);
     if ( err == Z_STREAM_END ) {
         return MATIO_E_NO_ERROR;
     } else if ( err != Z_OK ) {
@@ -387,7 +387,7 @@ InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes)
         bytesread += nbytes;
         z->avail_in = (uInt)nbytes;
         z->next_in = comp_buf;
-        err = inflate(z, Z_NO_FLUSH);
+        err = inflate(z, Z_FULL_FLUSH);
         if ( err == Z_STREAM_END ) {
             err = MATIO_E_NO_ERROR;
             break;
@@ -404,7 +404,7 @@ InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes)
     if ( z->avail_in ) {
         const mat_off_t offset = -(mat_off_t)z->avail_in;
         (void)fseeko((FILE *)mat->fp, offset, SEEK_CUR);
-        /* bytesread -= z->avail_in; */
+        bytesread -= z->avail_in;
         z->avail_in = 0;
     }
 

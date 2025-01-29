@@ -2,7 +2,7 @@
  * MAT File I/O Utility Functions
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -29,7 +29,7 @@
  */
 
 #include "matio_private.h"
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(_MSC_VER)
 #define WIN32_LEAN_AND_MEAN
 #define NOGDI
 #include <Windows.h>
@@ -75,7 +75,7 @@ strdup_vprintf(const char *format, va_list ap)
     return buffer;
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(_MSC_VER)
 /** @brief Convert from narrow UTF-8 string to wide string
  *
  * @ingroup mat_util

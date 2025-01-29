@@ -3,7 +3,7 @@
  * @ingroup MAT
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -158,7 +158,7 @@ enum matio_compression
  * @ingroup MAT
  * matio lookup type
  */
-enum matio_lookup
+enum
 {
     MAT_BY_NAME = 1, /**< Lookup by name */
     MAT_BY_INDEX = 2 /**< Lookup by index */
@@ -298,7 +298,7 @@ EXTERN enum mat_acc Mat_GetFileAccessMode(const mat_t *mat);
 EXTERN const char *Mat_GetFilename(const mat_t *mat);
 EXTERN const char *Mat_GetHeader(const mat_t *mat);
 EXTERN enum mat_ft Mat_GetVersion(const mat_t *mat);
-EXTERN char *const *Mat_GetDir(mat_t *mat, size_t *n);
+EXTERN char **Mat_GetDir(mat_t *mat, size_t *n);
 EXTERN int Mat_Rewind(mat_t *mat);
 
 /* MAT variable functions */
@@ -331,8 +331,8 @@ EXTERN matvar_t *Mat_VarGetStructsLinear(const matvar_t *matvar, int start, int 
                                          int copy_fields);
 EXTERN void Mat_VarPrint(const matvar_t *matvar, int printdata);
 EXTERN matvar_t *Mat_VarRead(mat_t *mat, const char *name);
-EXTERN int Mat_VarReadData(mat_t *mat, matvar_t *matvar, void *data, const int *start,
-                           const int *stride, const int *edge);
+EXTERN int Mat_VarReadData(mat_t *mat, matvar_t *matvar, void *data, int *start, int *stride,
+                           int *edge);
 EXTERN int Mat_VarReadDataAll(mat_t *mat, matvar_t *matvar);
 EXTERN int Mat_VarReadDataLinear(mat_t *mat, matvar_t *matvar, void *data, int start, int stride,
                                  int edge);
@@ -350,8 +350,8 @@ EXTERN matvar_t *Mat_VarSetStructFieldByName(matvar_t *matvar, const char *field
 EXTERN int Mat_VarWrite(mat_t *mat, matvar_t *matvar, enum matio_compression compress);
 EXTERN int Mat_VarWriteAppend(mat_t *mat, matvar_t *matvar, enum matio_compression compress,
                               int dim);
-EXTERN int Mat_VarWriteInfo(const mat_t *mat, matvar_t *matvar);
-EXTERN int Mat_VarWriteData(const mat_t *mat, matvar_t *matvar, void *data, const int *start,
+EXTERN int Mat_VarWriteInfo(mat_t *mat, matvar_t *matvar);
+EXTERN int Mat_VarWriteData(mat_t *mat, matvar_t *matvar, void *data, const int *start,
                             const int *stride, const int *edge);
 
 /* Other functions */

@@ -7,8 +7,6 @@
 
 namespace Upp {
 	
-MatFile::MatStatic MatFile::cons;
-
 
 MatVar::~MatVar() {
 	if (var != NULL && del)

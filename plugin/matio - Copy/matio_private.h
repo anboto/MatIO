@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2008-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -41,19 +41,18 @@
 #endif
 
 #if defined(__BORLANDC__) || defined(__MINGW32__) || defined(_MSC_VER)
+#define mat_off_t __int64
 #if defined(_MSC_VER) && defined(HAVE__FSEEKI64) && defined(HAVE__FTELLI64)
 #define MATIO_LFS
-#define mat_off_t __int64
 #define fseeko _fseeki64
 #define ftello _ftelli64
 #elif defined(__BORLANDC__) && defined(HAVE__FSEEKI64) && defined(HAVE__FTELLI64)
 #define MATIO_LFS
-#define mat_off_t __int64
 #define fseeko _fseeki64
 #define ftello _ftelli64
-#elif defined(HAVE_FSEEKO64) && defined(HAVE_FTELLO64)
+#elif !defined(HAVE_FSEEKO) && !defined(HAVE_FTELLO) && defined(HAVE_FSEEKO64) && \
+    defined(HAVE_FTELLO64)
 #define MATIO_LFS
-#define mat_off_t __int64
 #define fseeko fseeko64
 #define ftello ftello64
 #endif
@@ -102,27 +101,6 @@
 
 #define CAT_(X, Y) X##Y
 #define CAT(X, Y) CAT_(X, Y)
-
-#if defined(__GLIBC__)
-#if ( __BYTE_ORDER == __BIG_ENDIAN )
-#define MATIO_BE
-#elif (__BYTE_ORDER == __LITTLE_ENDIAN)
-#define MATIO_LE
-#endif
-#elif defined(_BIG_ENDIAN) && !defined(_LITTLE_ENDIAN)
-#define MATIO_BE
-#elif defined(_LITTLE_ENDIAN) && !defined(_BIG_ENDIAN)
-#define MATIO_LE
-#elif defined(__sparc) || defined(__sparc__) || defined(_POWER) || defined(__powerpc__) || \
-    defined(__ppc__) || defined(__hpux) || defined(_MIPSEB) || defined(_POWER) ||          \
-    defined(__s390__)
-#define MATIO_BE
-#elif defined(__i386__) || defined(__alpha__) || defined(__ia64) || defined(__ia64__) ||   \
-    defined(_M_IX86) || defined(_M_IA64) || defined(_M_ALPHA) || defined(__amd64) ||       \
-    defined(__amd64__) || defined(_M_AMD64) || defined(__x86_64) || defined(__x86_64__) || \
-    defined(_M_X64) || defined(__bfin__) || defined(__loongarch64) || defined(__aarch64__)
-#define MATIO_LE
-#endif
 
 /** @if mat_devman
  * @brief Matlab MAT File information

@@ -3,7 +3,7 @@
  * @ingroup MAT
  */
 /*
- * Copyright (c) 2015-2024, The matio contributors
+ * Copyright (c) 2015-2023, The matio contributors
  * Copyright (c) 2005-2014, Christopher C. Hulbert
  * All rights reserved.
  *
@@ -465,10 +465,8 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
 
     matvar->internal->id = dset_id;
     attr_id = H5Aopen_by_name(dset_id, ".", "MATLAB_class", H5P_DEFAULT, H5P_DEFAULT);
-    if ( attr_id < 1 ) {
-        H5Aclose(attr_id);
+    if ( attr_id < 1 )
         return MATIO_E_FAIL_TO_IDENTIFY;
-    }
     type_id = H5Aget_type(attr_id);
     class_str = (char *)calloc(H5Tget_size(type_id) + 1, 1);
     if ( NULL != class_str ) {
@@ -625,20 +623,18 @@ Mat_H5ReadFieldNames(matvar_t *matvar, hid_t dset_id, hsize_t *nfields)
     hsize_t i;
     hid_t attr_id, space_id;
     herr_t herr;
-    int err, ndims;
+    int err;
 
     attr_id = H5Aopen_by_name(dset_id, ".", "MATLAB_fields", H5P_DEFAULT, H5P_DEFAULT);
     space_id = H5Aget_space(attr_id);
-    ndims = H5Sget_simple_extent_ndims(space_id);
-    if ( 0 > ndims || 1 < ndims ) {
-        *nfields = 0;
+    err = H5Sget_simple_extent_dims(space_id, nfields, NULL);
+    if ( err < 0 ) {
         H5Sclose(space_id);
         H5Aclose(attr_id);
         return MATIO_E_GENERIC_READ_ERROR;
     } else {
         err = MATIO_E_NO_ERROR;
     }
-    (void)H5Sget_simple_extent_dims(space_id, nfields, NULL);
     if ( *nfields > 0 ) {
         hid_t field_id;
         hvl_t *fieldnames_vl = (hvl_t *)calloc((size_t)(*nfields), sizeof(*fieldnames_vl));
@@ -1405,12 +1401,11 @@ Mat_VarWriteRef(hid_t id, matvar_t *matvar, enum matio_compression compression, 
         err = MATIO_E_BAD_ARGUMENT;
     } else {
         char obj_name[64];
-        mat_snprintf(obj_name, sizeof(obj_name), "%llu", (unsigned long long)group_info.nlinks);
+        sprintf(obj_name, "%llu", (unsigned long long)group_info.nlinks);
         if ( NULL != matvar )
             matvar->compression = compression;
         err = Mat_VarWriteNext73(*refs_id, matvar, obj_name, refs_id);
-        mat_snprintf(obj_name, sizeof(obj_name), "/#refs#/%llu",
-                     (unsigned long long)group_info.nlinks);
+        sprintf(obj_name, "/#refs#/%llu", (unsigned long long)group_info.nlinks);
         H5Rcreate(ref, id, obj_name, H5R_OBJECT, -1);
     }
     return err;
@@ -2051,7 +2046,7 @@ Mat_VarWriteSparse73(hid_t id, matvar_t *matvar, const char *name)
             H5Aclose(attr_id);
         }
 
-        if ( MATIO_E_NO_ERROR == err && sparse->ndata > 0 ) {
+        if ( MATIO_E_NO_ERROR == err ) {
             ndata = sparse->ndata;
             h5_type = DataType2H5T(matvar->data_type);
             h5_dtype = DataType(h5_type, matvar->isComplex);
@@ -2065,7 +2060,7 @@ Mat_VarWriteSparse73(hid_t id, matvar_t *matvar, const char *name)
             H5Sclose(mspace_id);
         }
 
-        if ( MATIO_E_NO_ERROR == err && sparse->nir > 0 ) {
+        if ( MATIO_E_NO_ERROR == err ) {
             nir = sparse->nir;
             mspace_id = H5Screate_simple(1, &nir, NULL);
             dset_id = H5Dcreate(sparse_id, "ir", size_type_id, mspace_id, H5P_DEFAULT, H5P_DEFAULT,
@@ -2552,7 +2547,7 @@ Mat_Create73(const char *matname, const char *hdr_str)
     H5Fclose(fid);
     H5Pclose(plist_id);
 
-#if defined(_WIN32) && defined(_MSC_VER) && H5_VERSION_GE(1, 10, 6)
+#if defined(_WIN32) && defined(_MSC_VER) && H5_VERSION_GE(1, 11, 6)
     {
         wchar_t *wname = utf82u(matname);
         if ( NULL != wname ) {
@@ -2664,12 +2659,14 @@ int
 Mat_VarRead73(mat_t *mat, matvar_t *matvar)
 {
     int err = MATIO_E_NO_ERROR;
-    hid_t dset_id, ref_id;
+    hid_t fid, dset_id, ref_id;
 
     if ( NULL == mat || NULL == matvar )
         return MATIO_E_BAD_ARGUMENT;
     else if ( matvar->internal->id < 0 )
         return MATIO_E_FAIL_TO_IDENTIFY;
+
+    fid = *(hid_t *)mat->fp;
 
     switch ( matvar->class_type ) {
         case MAT_C_DOUBLE:
@@ -2972,7 +2969,7 @@ Mat_VarReadData73(mat_t *mat, matvar_t *matvar, void *data, const int *start, co
                   const int *edge)
 {
     int err = MATIO_E_NO_ERROR, k;
-    hid_t dset_id, ref_id, dset_space, mem_space;
+    hid_t fid, dset_id, ref_id, dset_space, mem_space;
     hsize_t *dset_start_stride_edge;
     hsize_t *dset_start, *dset_stride, *dset_edge;
 
@@ -2981,6 +2978,8 @@ Mat_VarReadData73(mat_t *mat, matvar_t *matvar, void *data, const int *start, co
         return MATIO_E_BAD_ARGUMENT;
     else if ( matvar->internal->id < 0 )
         return MATIO_E_FAIL_TO_IDENTIFY;
+
+    fid = *(hid_t *)mat->fp;
 
     dset_start_stride_edge = (hsize_t *)malloc(matvar->rank * 3 * sizeof(hsize_t));
     if ( NULL == dset_start_stride_edge ) {
@@ -3057,13 +3056,15 @@ int
 Mat_VarReadDataLinear73(mat_t *mat, matvar_t *matvar, void *data, int start, int stride, int edge)
 {
     int err = MATIO_E_NO_ERROR, k;
-    hid_t dset_id, dset_space, mem_space;
+    hid_t fid, dset_id, dset_space, mem_space;
     hsize_t *points, dset_edge, *dimp;
 
     if ( NULL == mat || NULL == matvar || NULL == data )
         return MATIO_E_BAD_ARGUMENT;
     else if ( matvar->internal->id < 0 )
         return MATIO_E_FAIL_TO_IDENTIFY;
+
+    fid = *(hid_t *)mat->fp;
 
     dset_edge = edge;
     mem_space = H5Screate_simple(1, &dset_edge, NULL);
@@ -3265,8 +3266,6 @@ Mat_VarWrite73(mat_t *mat, matvar_t *matvar, int compress)
 
     if ( NULL == mat || NULL == matvar )
         return MATIO_E_BAD_ARGUMENT;
-    if ( NULL == matvar->name )
-        return MATIO_E_OUTPUT_BAD_DATA;
 
     matvar->compression = (enum matio_compression)compress;
 
