@@ -131,7 +131,7 @@ void DemoMatrix() {
 	
 	VERIFY(mfile0.OpenCreate(filename, MAT_FT_MAT73));
 	
-	MultiDimMatrix<double> A0(2, 3, 5);
+	MultiDimMatrix<double> A0(2, 3, 1);
 	for (int i = 0; i < A0.GetAxisDim(0); ++i)
 		for (int j = 0; j < A0.GetAxisDim(1); ++j)
 			for (int k = 0; k < A0.GetAxisDim(2); ++k)
@@ -139,7 +139,7 @@ void DemoMatrix() {
 	
 	mfile0.Set<double>("A", A0);
 
-	MultiDimMatrix<std::complex<double>> Fex0(2, 3, 5);
+	MultiDimMatrix<std::complex<double>> Fex0(1, 3, 2);
 	for (int i = 0; i < Fex0.GetAxisDim(0); ++i)
 		for (int j = 0; j < Fex0.GetAxisDim(1); ++j)
 			for (int k = 0; k < Fex0.GetAxisDim(2); ++k)
@@ -185,15 +185,6 @@ void DemoMatrix() {
 CONSOLE_APP_MAIN
 {
 	try {
-		MatFile mfile;
-	
-		mfile.OpenRead(AFX(GetDesktopFolder(), "14755_y.mat"));
-		
-		PrintVariables(mfile);
-		
-		Vector<String> cell;
-		mfile.GetCell("Legend", cell);
-	
 		DemoStructure();
 		DemoMatrix();
 		Cout() << "\nProgram ended OK";

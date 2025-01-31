@@ -188,7 +188,7 @@ public:
 	
 	String GetVarName(int id) {
 		GetVarList();
-		if (listVar == NULL)
+		if (!listVar)
 			return Null;
 		
 		if (id >= (int)numVar)
@@ -196,16 +196,47 @@ public:
 		return listVar[id];
 	}
 	
-	bool Exist(String name) {
-		GetVarList();
-		if (listVar == NULL)
+		
+	bool Exist(String name, bool nocase = false) {
+		if (!listVar)
 			return false;
 		
+		if (nocase)
+			name = ToLower(name);
+		
 		for (int i = 0; i < (int)numVar; ++i) {
-			if (listVar[i] == name)
-				return true;
+			if (nocase) {
+				if (ToLower(listVar[i]) == name)
+					return true;
+			} else {
+				if (listVar[i] == name)
+					return true;
+			}
 		}
 		return false;
+	}
+	
+	int Exist(const Vector<String> &name, bool nocase = false) {
+		GetVarList();
+		if (!listVar)
+			return false;
+		
+		Vector<String> names;
+		if (!nocase)
+			names = clone(name);
+		else {
+			names.SetCount(name.size());
+			for (int i = 0; i < name.size(); ++i) 
+				names[i] = ToLower(name[i]);
+		}
+		
+		for (int i = 0; i < (int)numVar; ++i) {
+			for (int iv = 0; iv < name.size(); ++iv) {
+				if (listVar[i] == names[iv])
+					return iv;
+			}
+		}
+		return -1;
 	}
 	
 	bool VarDelete(String name) {
@@ -244,11 +275,32 @@ public:
 		return ret;	
 	}
 	
-	template <class T> inline
-	T Get(String name) {
+	MatVar GetVarThrow(String name, bool nocase = false) {
+		if (nocase) {
+			GetVarList();
+			if (!listVar)
+				throw Exc(t_("Matio: No vars"));
+		
+			name = ToLower(name);
+			int i;
+			for (i = 0; i < (int)numVar; ++i) {
+				if (ToLower(listVar[i]) == name) {
+					name = listVar[i];
+					break;
+				}
+			}
+			if (i == numVar)
+				throw Exc(t_("Matio: Var does not exist"));
+		}
 		MatVar var = GetVar(name);
 		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+			throw Exc(t_("Matio: Var does not exist"));
+		return var;
+	}
+	
+	template <class T> inline
+	T Get(String name, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		return Get<T>(var);
 	}
 	
@@ -274,10 +326,8 @@ public:
 	}
 
 	template <class T>
-	void Get(String name, Vector<T> &ret) {
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+	void Get(String name, Vector<T> &ret, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		Get<T>(var, ret);
 	}
 	
@@ -301,10 +351,8 @@ public:
 			throw Exc("Matio: Problem reading var");
 	}
 
-	void Get(String name, Eigen::VectorXd &ret) {
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+	void Get(String name, Eigen::VectorXd &ret, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		Get(var, ret);
 	}
 	
@@ -330,10 +378,8 @@ public:
 		CopyRowMajor(d.Get(), int(var.GetDimCount(0)), int(var.GetDimCount(1)), ret);
 	}
 	
-	void Get(String name, Eigen::MatrixXd &ret) {
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+	void Get(String name, Eigen::MatrixXd &ret, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		Get(var, ret);
 	}
 	
@@ -366,10 +412,8 @@ public:
 	}	
 
 	template <class T>
-	void Get(String name, MultiDimMatrix<std::complex<T>> &ret) {
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+	void Get(String name, MultiDimMatrix<std::complex<T>> &ret, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		Get<T>(var, ret);
 	}
 	
@@ -395,10 +439,8 @@ public:
 	}	
 
 	template <class T>
-	void Get(String name, MultiDimMatrix<T> &ret) {
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+	void Get(String name, MultiDimMatrix<T> &ret, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		Get<T>(var, ret);
 	}
 			
@@ -430,10 +472,8 @@ public:
 		}
 	}
 	
-	void Get(String name, Eigen::MatrixXcd &ret) {
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc("Matio: Var does not exist");
+	void Get(String name, Eigen::MatrixXcd &ret, bool nocase = false) {
+		MatVar var = GetVarThrow(name, nocase);
 		Get(var, ret);
 	}
 	
@@ -675,16 +715,7 @@ String MatFile::Get<String>(const MatVar &var) {
 	
 	return ret;	
 }
-/*
-template <> inline
-void MatFile::Get(MatVar &var, MatMatrix<std::complex<float>> &ret) {Get<float>(var, ret);}
 
-template <> inline
-void MatFile::Get(MatVar &var, MatMatrix<std::complex<double>> &ret) {Get<double>(var, ret);}
-
-template <> inline
-void MatFile::Get(MatVar &var, MatMatrix<std::complex<long double>> &ret) {Get<long double>(var, ret);}
-*/
 }
 	
 #endif
