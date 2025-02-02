@@ -41,7 +41,7 @@ template<> void inline GetTypeCode<const char *> (enum matio_classes &class_type
 
 class MatVar {
 public:
-	MatVar() : var(NULL), del(true) {}
+	MatVar() : var(nullptr), del(true) {}
 	MatVar(const Nuller&)			{var = 0;} 
 	bool IsNullInstance() const    	{return var == 0;}
 	
@@ -118,7 +118,7 @@ public:
 	}
 
 	void SetStruct(String name, Eigen::MatrixXd &data, int index = 0) {
-		SetStruct<double>(name, data.data(), data.rows(), data.cols(), index);
+		SetStruct<double>(name, data.data(), (int)data.rows(), (int)data.cols(), index);
 	}
 	
 	void SetStruct(String name, String data, int index = 0) {
@@ -188,17 +188,14 @@ public:
 	
 	String GetVarName(int id) {
 		GetVarList();
-		if (!listVar)
-			return Null;
-		
 		if (id >= (int)numVar)
 			return Null;
 		return listVar[id];
 	}
-	
 		
 	bool Exist(String name, bool nocase = false) {
-		if (!listVar)
+		GetVarList();
+		if (numVar == 0)
 			return false;
 		
 		if (nocase)
@@ -218,8 +215,8 @@ public:
 	
 	int Exist(const Vector<String> &name, bool nocase = false) {
 		GetVarList();
-		if (!listVar)
-			return false;
+		if (numVar == 0)
+			return -1;
 		
 		Vector<String> names;
 		if (!nocase)
@@ -243,14 +240,13 @@ public:
 		ASSERT(mat != NULL);
 		
 		int ret = Mat_VarDelete(mat, name);
-		if (ret == 0) {
-			GetVarList();
-			return 0;
-		}
-		return ret;
+		GetVarList();
+		if (ret == 0) 
+			return true;
+		return false;
 	}
 	
-	MatVar GetVar(String name) {return MatVar(mat, name);}
+	MatVar GetVar(String name) const {return MatVar(mat, name);}
 
 	template <class T> inline
 	T Get(const MatVar &var) {
@@ -277,8 +273,7 @@ public:
 	
 	MatVar GetVarThrow(String name, bool nocase = false) {
 		if (nocase) {
-			GetVarList();
-			if (!listVar)
+			if (numVar == 0)
 				throw Exc(t_("Matio: No vars"));
 		
 			name = ToLower(name);
@@ -289,18 +284,15 @@ public:
 					break;
 				}
 			}
-			if (i == numVar)
+			if (i == (int)numVar)
 				throw Exc(t_("Matio: Var does not exist"));
 		}
-		MatVar var = GetVar(name);
-		if (IsNull(var))
-			throw Exc(t_("Matio: Var does not exist"));
-		return var;
+		return GetVar(name);
 	}
 	
 	template <class T> inline
 	T Get(String name, bool nocase = false) {
-		MatVar var = GetVarThrow(name, nocase);
+		MatVar var = GetVarThrow(name, nocase);	
 		return Get<T>(var);
 	}
 	
@@ -497,12 +489,12 @@ public:
 	            continue;
 	
 	        if (element->class_type == MAT_C_CHAR) {
-	            size_t total_chars = element->dims[0] * element->dims[1];
+	            int total_chars = int(element->dims[0] * element->dims[1]);
 	
 	            StringBuffer c_str(total_chars + 1);
 				if (element->data_type == MAT_T_UINT16) {
 		            uint16_t *matlab_str = (uint16_t*)element->data;
-		            for (size_t j = 0; j < total_chars; j++)
+		            for (int j = 0; j < total_chars; j++)
 		                c_str[j] = (char)matlab_str[j];
 				} else if (element->data_type == MAT_T_UTF8)
 		            memcpy(c_str, element->data, total_chars);
@@ -519,7 +511,7 @@ public:
 		size_t num = strs.size();
 		Buffer<matvar_t *> cell_elements(num);
 	
-	    for (size_t i = 0; i < num; i++) {
+	    for (int i = 0; i < (int)num; i++) {
 	        const char *c_str = strs[i];
 	
 	        size_t dims[2] = {1, strlen(c_str)};
@@ -590,11 +582,11 @@ public:
 	}
 
 	bool Set(String name, const Eigen::VectorXd &data, bool compression = true) {
-		return Set<double>(name, data.data(), data.size(), Null, compression);
+		return Set<double>(name, data.data(), (int)data.size(), Null, compression);
 	}
 	
 	bool Set(String name, const Eigen::MatrixXd &data, bool compression = true) {
-		return Set<double>(name, data.data(), data.rows(), data.cols(), compression);
+		return Set<double>(name, data.data(), (int)data.rows(), (int)data.cols(), compression);
 	}
 
 	template <class T>
@@ -618,7 +610,7 @@ public:
 	}
 	
 	bool Set(String name, const char *data, bool compression = true) {
-		return Set<String>(name, data, 1, strlen(data), compression);
+		return Set<String>(name, data, 1, (int)strlen(data), compression);
 	}
 			
 	template <class T>
@@ -638,7 +630,7 @@ public:
 			
 		int sz = 1;
 		for (int i = 0; i < numDim; ++i)
-			sz *= dims[i];
+			sz *= (int)dims[i];
 		Buffer<double> real(sz), imag(sz);
 		std::complex<T> *cdata = (std::complex<T>*)data;
 		for (int i = 0; i < sz; ++i) {
@@ -666,7 +658,7 @@ public:
 	mat_t *mat = nullptr;
 	
 private:
-	char *const*listVar = nullptr;
+	char *const* listVar = nullptr;
 	size_t numVar;
 	
 	bool Open(String fileName, int mode) {
@@ -713,7 +705,7 @@ String MatFile::Get<String>(const MatVar &var) {
 	if (0 != Mat_VarReadData(mat, var.var, (void *)ret.Begin(), start, stride, edge)) 
 		return String();
 	
-	return ret;	
+	return String(ret);	
 }
 
 }
