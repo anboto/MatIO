@@ -198,15 +198,19 @@ public:
 		if (numVar == 0)
 			return false;
 		
-		if (nocase)
+		if (nocase) {
 			name = ToLower(name);
+			name.Replace("_", "");
+		}
 		
 		for (int i = 0; i < (int)numVar; ++i) {
 			if (nocase) {
-				if (ToLower(listVar[i]) == name)
+				String var = ToLower(listVar[i]);
+				var.Replace("_", "");
+				if (var == name)
 					return true;
 			} else {
-				if (listVar[i] == name)
+				if (String(listVar[i]) == name)
 					return true;
 			}
 		}
@@ -223,13 +227,21 @@ public:
 			names = clone(name);
 		else {
 			names.SetCount(name.size());
-			for (int i = 0; i < name.size(); ++i) 
+			for (int i = 0; i < name.size(); ++i) {
 				names[i] = ToLower(name[i]);
+				names[i].Replace("_", "");
+			}
 		}
 		
 		for (int i = 0; i < (int)numVar; ++i) {
+			String var;
+			if (nocase) {
+				var = ToLower(listVar[i]);
+				var.Replace("_", "");
+			} else
+				var = String(listVar[i]);
 			for (int iv = 0; iv < name.size(); ++iv) {
-				if (listVar[i] == names[iv])
+				if (var == names[iv])
 					return iv;
 			}
 		}
@@ -277,9 +289,12 @@ public:
 				throw Exc(t_("Matio: No vars"));
 		
 			name = ToLower(name);
+			name.Replace("_", "");
 			int i;
 			for (i = 0; i < (int)numVar; ++i) {
-				if (ToLower(listVar[i]) == name) {
+				String var = ToLower(listVar[i]);
+				var.Replace("_", "");
+				if (var == name) {
 					name = listVar[i];
 					break;
 				}
@@ -308,10 +323,12 @@ public:
 		Buffer<int> stride(numDim, 1);
 		Buffer<int> edge(numDim);
 	
-		for (int i = 0; i < numDim; ++i)
+		int sz = 1;
+		for (int i = 0; i < numDim; ++i) {
 			edge[i] = var.GetDimCount(i);
-	
-		ret.SetCount((int)(var.GetDimCount(0)*(int)var.GetDimCount(1)));
+			sz *= var.GetDimCount(i);
+		}
+		ret.SetCount(sz);
 	
 		if (0 != Mat_VarReadData(mat, var.var, ret.begin(), start, stride, edge)) 
 			throw Exc("Matio: Problem reading var");
@@ -362,12 +379,12 @@ public:
 		for (int i = 0; i < numDim; ++i)
 			edge[i] = var.GetDimCount(i);
 	
-		Buffer<double> d((int)var.GetDimCount(0)*(int)var.GetDimCount(1));
-		
-		if (0 != Mat_VarReadData(mat, var.var, d.Get(), start, stride, edge)) 
+		//Buffer<double> d((int)var.GetDimCount(0)*(int)var.GetDimCount(1));
+		ret.resize(var.GetDimCount(0), var.GetDimCount(1));
+		if (0 != Mat_VarReadData(mat, var.var, ret.data(), start, stride, edge)) 
 			throw Exc("Matio: Problem reading var");
 		
-		CopyRowMajor(d.Get(), int(var.GetDimCount(0)), int(var.GetDimCount(1)), ret);
+		//CopyRowMajor(d.Get(), int(var.GetDimCount(0)), int(var.GetDimCount(1)), ret);
 	}
 	
 	void Get(String name, Eigen::MatrixXd &ret, bool nocase = false) {
