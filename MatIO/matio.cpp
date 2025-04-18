@@ -5,9 +5,10 @@
 #include "matio.h"
 #include <plugin/matio/lib/matioConfig.h>
 
+#include <Functions4U/EnableWarnings.h>
+
 namespace Upp {
 	
-
 MatVar::~MatVar() {
 	if (var != NULL && del)
 		Mat_VarFree(var);
