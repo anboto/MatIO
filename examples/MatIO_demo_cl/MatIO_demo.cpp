@@ -12,16 +12,20 @@ using namespace Upp;
 void PrintVariables(MatFile &mfile) {
 	Cout() << "\nVariables list:";
 	for (int iv = 0; iv < mfile.GetVarCount(); ++iv) {
-		MatVar var = mfile.GetVar(mfile.GetVarName(iv));
-		Cout() << Format("\n- %s <%s>", var.GetName(), var.GetTypeString());
-		for (int id = 0; id < var.GetDimCount(); ++id) {
-			if (id == 0)
-				Cout() << "(";
-			else
-				Cout() << ",";
-			Cout() << FormatInt(var.GetDimCount(id));
-			if (id == var.GetDimCount() -1)
-				Cout() << ")";
+		String name = mfile.GetVarName(iv);
+		Cout() << Format("\n- %s", name);
+		if (name != "#subsystem#" && name != "#refs#") {
+			MatVar var = mfile.GetVar(name);
+			Cout() << Format(" <%s>", var.GetTypeString());
+			for (int id = 0; id < var.GetDimCount(); ++id) {
+				if (id == 0)
+					Cout() << "(";
+				else
+					Cout() << ",";
+				Cout() << FormatInt(var.GetDimCount(id));
+				if (id == var.GetDimCount() -1)
+					Cout() << ")";
+			}
 		}
 	}	
 }
