@@ -30,4 +30,10 @@ that do not have access or do not want to rely on MATLAB`'s shared
 libraries.]&]
 [s0; Matio U`+`+ wrapper is a basic C`+`+ wrapper for Matio, updated 
 to version 1.5.28 (30/10/2024)&]
-[s0; A simple sample is included in examples/MatIO`_demo package.]]
+[s0; A simple sample is included in examples/MatIO`_demo package.&]
+[s0; &]
+[s0; The main classes included are:&]
+[s0;i150;O0; [^topic`:`/`/MatIO`/src`/MatFile`_en`-us^ MatFile]&]
+[s0;i150;O0; [^topic`:`/`/MatIO`/src`/MatFileStructNode`_en`-us^ MatFile`::StructureNode
+]&]
+[s0;i150;O0; [^topic`:`/`/MatIO`/src`/MatVar`_en`-us^ MatVar]]]

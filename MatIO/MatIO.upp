@@ -8,8 +8,8 @@ options
 	-DHAVE_ZLIB;
 
 file
-	matio.cpp,
 	matio.h,
+	Copying,
 	srcdoc.tpp,
-	Copying;
+	src.tpp;
 
