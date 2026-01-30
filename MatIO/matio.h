@@ -8,7 +8,6 @@
 #include <Eigen/Eigen.h>
 #include <Eigen/MultiDimMatrix.h>
 
-#include <Functions4U/EnableWarnings.h>
 
 namespace Upp {
 
