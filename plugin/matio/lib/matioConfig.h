@@ -221,6 +221,8 @@
 #   define MATIO_PLATFORM "i686-pc-windows"
 #elif defined(__linux__)
 #   define MATIO_PLATFORM "posix"
+#elif defined(__APPLE__)
+#   define MATIO_PLATFORM "macos"
 #endif
 
 /* Debug disabled */
