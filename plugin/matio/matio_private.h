@@ -75,7 +75,7 @@
 
 #if HAVE_ZLIB
 	#ifdef _WIN32
-	#include <plugin/z/lib/zlib.h>
+	#include <zlib.h>
 	#else
 	#include <zlib.h>
 	#endif

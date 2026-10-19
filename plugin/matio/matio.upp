@@ -4,7 +4,6 @@ options(BUILDER_OPTION) NOWARNINGS;
 
 uses
 	Core,
-	plugin/z,
 	plugin/Hdf5,
 	Eigen;
 
